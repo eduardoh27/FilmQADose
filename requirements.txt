@@ -1,0 +1,10 @@
+numpy==1.18.5
+wxPython==4.1.0
+pillow==7.2.0
+scipy==1.5.2
+SimpleITK==1.2.4
+matplotlib==3.3.0
+dill==0.3.2
+tifffile==2020.7.24
+opencv-python==4.4.0.40
+pydicom==2.0.0
