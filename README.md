@@ -1,25 +1,28 @@
 # FilmQADose
 
 
-
-
 ## Getting Started
 
 Follow these steps to set up and run the application.
 
 ### Prerequisites
 
-- Python 3.7 installed on your system.
+- Python 3.10 installed on your system.
 - Ensure you have `pip` to install the required dependencies.
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone -b filmqadog https://github.com/eduardoh27/FilmQADose.git
+   git clone -b pyside https://github.com/eduardoh27/FilmQADose.git
    ```
 
-2. Install dependencies:
+2. Change to the root directory:
+   ```bash
+   cd app
+   ```
+
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
@@ -28,7 +31,7 @@ Follow these steps to set up and run the application.
 
 To run the application, execute the following command from the root directory:
 ```bash
-python app/interfazFinal.py
+python main.py
 ```
 
 ## Contributing
