@@ -1,6 +1,9 @@
 # FilmQADose
 
 
+## NOTE:
+
+To see the current version under development, check the "pyside" branch.
 
 
 ## Getting Started
