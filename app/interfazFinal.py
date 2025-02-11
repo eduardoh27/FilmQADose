@@ -194,7 +194,7 @@ class MyFrame(wx.Frame):
         # begin wxGlade: MyFrame.__init__
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
-        self.panelesVariables = [PanelInformacion(self,"\n \n \n \n \n \n \n \n Bienvenido a FilmQADog \n \n \n \nCarlos Daniel Contreras Quiroz \n \n Universidad de los Andes \n  \nCentro de Control de Cáncer")]
+        self.panelesVariables = [PanelInformacion(self,"\n \n \n \n \n \n \n \n FilmQADog \n \n \n \n 2025-10")]
         self.SetSize((1366, 741))
         self.notebookImagenes = aui.AuiNotebook(self, wx.ID_ANY)
         
@@ -282,7 +282,8 @@ class MyFrame(wx.Frame):
         self.notebookImagenes.AddPage(self.paginas[0], "Bienvenido")
         figInicial=self.paginas[0].figure
         a1=figInicial.gca()
-        im = tiff.imread(os.path.join('app', 'filmQAPerro.tif'))
+        script_path = os.path.abspath(os.path.dirname(__file__))
+        im = tiff.imread(os.path.join(script_path, 'filmQAPerro.tif'))
         self.arayActual=im
         a1.imshow(im)
         self.Layout()

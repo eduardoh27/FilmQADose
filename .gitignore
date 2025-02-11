@@ -1,6 +1,7 @@
 # virtual environments
 venv/
 venv1/
+venv*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
