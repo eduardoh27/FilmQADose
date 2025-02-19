@@ -2,3 +2,5 @@ pyside6
 pillow
 pydicom
 numpy
+tifffile
+matplotlib

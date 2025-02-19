@@ -7,7 +7,7 @@ Follow these steps to set up and run the application.
 
 ### Prerequisites
 
-- Python 3.10 installed on your system.
+- Python 3.9 installed on your system.
 - Ensure you have `pip` to install the required dependencies.
 
 ### Installation
