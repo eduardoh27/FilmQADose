@@ -7,7 +7,9 @@ from sklearn.metrics import r2_score
 
 class FilmCalibration:
 
-    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, calibration_type: str = 'single-channel', fitting_function_name: str = 'rational'):
+    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
+                calibration_type: str = 'single-channel', fitting_function_name: str = 'rational',
+                filter_type=None):
         """
         Initializes the film calibration process by defining the ground truth image
         and the calibration type.
@@ -23,6 +25,7 @@ class FilmCalibration:
         self.groundtruth_image = groundtruth_image
         self.bits_per_channel = bits_per_channel
         self.calibration_type = calibration_type
+        self.filter_type = filter_type
         self.doses = {}           # Dictionary mapping dose value to a CalibrationDose object
         # Global PV_before per channel, defined as the PV_after of dose 0 for each channel.
         self.pixel_values_before = [None, None, None]
@@ -30,7 +33,7 @@ class FilmCalibration:
         self.dose_to_independent_by_channel = []  
         self.parameters = None
         self.uncertainties = None  # Will store the uncertainties (standard deviations) of the parameters
-
+        
         # Retrieve the FittingFunction instance
         self.fitting_func_instance = get_fitting_function(fitting_function_name)
 

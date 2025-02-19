@@ -4,7 +4,9 @@ import cv2
 from skimage import io
 from skimage.util import img_as_float, img_as_ubyte, img_as_uint
 from scipy.ndimage import median_filter
-
+from scipy.signal import convolve2d, wiener
+from scipy.signal.windows import gaussian
+from numpy.fft import fft2, ifft2
 
 def read_image(image_path):
     """
@@ -28,6 +30,7 @@ def read_image(image_path):
     
     return image
 
+# TODO: check for 16 bit images
 def read_image_tif(image_path):
     """
     Reads an image from the specified file path using skimage.io.
@@ -110,12 +113,37 @@ def filter_image(image: np.ndarray, filter_type: str = None) -> np.ndarray:
         The filtered or processed image as a NumPy array.
     """
 
+    # Ensure the image has only one channel
+    if image.ndim > 2 and image.shape[-1] > 1:
+        raise ValueError("The input image must be single-channel (grayscale).")
+
+    def wiener_filter1(image, K=30):
+        kernel_size = 3
+        h = gaussian(kernel_size, kernel_size / 3).reshape(kernel_size, 1)
+        h = np.dot(h, h.transpose())
+        h /= np.sum(h)
+        kernel = h
+        kernel /= np.sum(kernel)
+        transformed = fft2(np.copy(img))
+        kernel = fft2(kernel, s = img.shape)
+        kernel = np.conj(kernel) / (np.abs(kernel) ** 2 + K)
+        transformed = transformed * kernel
+        wiener = np.abs(ifft2(transformed))
+        return wiener
+
+
     if filter_type is None:
-        filtred = image
+        filtered = image
 
     elif filter_type == "median":
+        print("median")
         filtered = median_filter(image, size=3)
-    
+
+    elif filter_type == "wiener":
+        print("wiener")
+        #filtered = wiener_filter(noisy_img)
+        filtered = wiener(image)
+
     return filtered
 
 

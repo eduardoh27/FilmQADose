@@ -57,7 +57,7 @@ class CalibrationDose:
             # Extract the ROI from the selected channel
             roi = self.calibration.groundtruth_image[y:y+size, x:x+size, channel]
             # Apply the median filter
-            filtered_roi = filter_image(roi, filter_type='median')
+            filtered_roi = filter_image(roi, filter_type=self.calibration.filter_type)
             # Compute the average pixel value of the filtered ROI
             average_value = np.mean(filtered_roi)
             roi_values.append(average_value)
