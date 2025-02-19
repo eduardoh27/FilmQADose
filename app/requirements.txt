@@ -4,3 +4,5 @@ pydicom
 numpy
 tifffile
 matplotlib
+scikit-learn
+opencv-python

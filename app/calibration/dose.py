@@ -17,7 +17,8 @@ class CalibrationDose:
         self.rois = []                # List of ROIs associated with this dose, each as (x, y, size)
         # Dictionaries to store the average pixel value (PV_after) and netOD per channel.
         self.pixel_values_after = {}  # {channel: PV_after}
-        self.netODs = {}              # {channel: netOD}
+        # self.netODs = {}              # {channel: netOD}
+        self.independent_values = {}  # {channel: computed independent variable}
 
     def add_roi(self, x: int, y: int, size: int):
         """
@@ -67,37 +68,43 @@ class CalibrationDose:
             # TODO: añadir excepción: se invocó el método pero no había rois asociados
             pass
         return self.pixel_values_after.get(channel, None)
-
-
-    def compute_netOD(self, pixel_values_before, channel: int = 0) -> float:
+    
+    def compute_independent_value(self, pixel_values_before, channel: int) -> float:
         """
-        Computes the net optical density (netOD) for this dose in a specific channel.
-        The global PV_before (pixel value before exposure) is provided, and the PV_after
-        is taken from the computed pixel value for that channel.
-        
+        Computes the independent variable value for this dose based on the given type.
+
         Parameters
         ----------
-        PV_before : float
-            The pixel value before exposure (defined at the global calibration level).
+        pixel_values_before : dict
+            A dictionary with the pixel value before exposure for each channel.
         channel : int, optional
-            The image channel to use (default is 0).
-        
+            The image channel to use.
+        independent_variable : str
+            The type of independent variable to compute ('netOD' or 'netT').
+        bits_per_channel : int, optional
+            Number of bits per channel (used for netT calculation), default is 8.
+
         Returns
         -------
         float
-            The computed net optical density for this dose in the given channel.
-        
-        Raises
-        ------
-        ValueError
-            If the pixel value for the given channel has not been computed yet.
+            The computed independent value.
         """
-        if channel not in self.pixel_values_after or self.pixel_values_after[channel] is None:
-            raise ValueError("The average pixel value after exposure for channel {} has not been computed yet.".format(channel))
-        
-        self.netODs[channel] = np.log10(pixel_values_before[channel] / self.pixel_values_after[channel])
-        return self.netODs[channel]
+        independent_variable = self.calibration.fitting_func_instance.independent_variable
 
+        if channel not in self.pixel_values_after or self.pixel_values_after[channel] is None:
+            raise ValueError(f"The average pixel value after exposure for channel {channel} has not been computed yet.")
+
+        if independent_variable == 'netOD':
+            value = np.log10(pixel_values_before[channel] / self.pixel_values_after[channel])
+        elif independent_variable == 'netT':
+            bits_per_channel = self.calibration.bits_per_channel
+            # netT = (PV_after - PV_before) / 2^(bits_per_channel)
+            value = np.abs(self.pixel_values_after[channel] - pixel_values_before[channel]) / (2 ** bits_per_channel)
+        else:
+            raise ValueError(f"Unsupported independent variable type: {independent_variable}")
+            
+        self.independent_values[channel] = value
+        return value
 
     def get_roi_count(self) -> int:
         """
@@ -112,5 +119,4 @@ class CalibrationDose:
     
 
     def __repr__(self):
-        return (f"CalibrationDose(value={self.value}, num_rois={self.get_roi_count()}, "
-                f"pixel_value={self.pixel_value}, netOD={self.netOD})")
+        return (f"CalibrationDose(value={self.value}, num_rois={self.get_roi_count()}")

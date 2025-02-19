@@ -1,7 +1,9 @@
 import numpy as np
-from scipy.ndimage import median_filter
 import matplotlib.pyplot as plt
+import cv2
 from skimage import io
+from skimage.util import img_as_float, img_as_ubyte, img_as_uint
+from scipy.ndimage import median_filter
 
 
 def read_image(image_path):
@@ -23,6 +25,32 @@ def read_image(image_path):
         image = io.imread(image_path, plugin='pil')
     else:
         image = io.imread(image_path)
+    
+    return image
+
+def read_image_tif(image_path):
+    """
+    Reads an image from the specified file path using skimage.io.
+    Uses the 'pil' plugin for TIFF images.
+    
+    Parameters:
+    -----------
+    image_path : str
+        Path to the image file.
+    
+    Returns:
+    --------
+    image : ndarray
+        The loaded image as a NumPy array.
+    """
+    if image_path.lower().endswith('.tif') or image_path.lower().endswith('.tiff'):
+        cvImage = cv2.imread('Dosis0a10.tif', -1)
+        cvImage = cv2.cvtColor(cvImage, cv2.COLOR_BGR2RGB)
+        image = img_as_uint(cvImage)
+    else:
+        image = io.imread(image_path)
+
+    print(image.max())
     
     return image
 

@@ -1,52 +1,115 @@
 """
 functions.py
 
-This module defines various fitting functions along with their descriptive texts.
-Each function is identified by a name (as a string) and can be retrieved when needed.
+This module defines a FittingFunction class that encapsulates a fitting function,
+its name, descriptive text, the names of its fitting parameters, and the possible types
+of independent variables ("x") that can be used (e.g., netOD, netT, reflectance).
 """
 
-def exponential(netOD, a, b, n):
+class FittingFunction:
+    def __init__(self, name: str, func, description: str, param_names: list, independent_variable: str):
+        """
+        Initializes a FittingFunction instance.
+
+        Parameters
+        ----------
+        name : str
+            The name of the fitting function.
+        func : callable
+            The fitting function. The independent variable (x) should be its first argument.
+        description : str
+            A descriptive text (e.g., a LaTeX string) representing the fitting function.
+        param_names : list
+            A list of fitting parameter names (e.g., ["a", "b", "n"]).
+        x_types : list
+            The independent variable of the function 
+            (e.g., "netOD", "netT").
+        """
+        self.name = name
+        self.func = func
+        self.description = description
+        self.param_names = param_names
+        self.independent_variable = independent_variable
+
+    def __repr__(self):
+        return (f"FittingFunction(name={self.name}, "
+                f"param_names={self.param_names}, x_types={self.x_types})")
+
+# Define the polynomial fitting function.
+def polynomial(x, a, b, n):
     """
-    Exponential fitting function.
+    Polynomial fitting function.
     
     Parameters
     ----------
-    netOD : float or array-like
-        Net optical density.
+    x : float or array-like
+        The independent variable (e.g., netOD).
     a, b, n : float
-        fitting parameters.
+        Fitting parameters.
     
     Returns
     -------
     float or array-like
         Calculated dose.
     """
-    return a * netOD + b * (netOD ** n)
+    return a * x + b * (x ** n)
 
-# Dictionary mapping function names to their corresponding fitting functions.
-fitting_functions = {
-    "exponential": exponential,
-}
-
-# Dictionary mapping function names to their descriptive text.
-fitting_function_texts = {
-    "exponential": r"$D = a netOD + b netOD^n$",
-}
-
-def get_fitting_function(name):
+# Define the rational fitting function.
+def rational(x, a, b):
     """
-    Retrieves the fitting function and its description text by name.
+    Rational fitting function.
+    
+    Parameters
+    ----------
+    x : float or array-like
+        The independent variable (e.g., netOD).
+    a, b : float
+        Fitting parameters.
+    
+    Returns
+    -------
+    float or array-like
+        Calculated dose.
+    """
+    return (a * x) / (1 - b * x)
+
+# Create FittingFunction instances for each fitting method.
+# You can define the supported x_types based on your application needs.
+polynomial_fitting = FittingFunction(
+    name="polynomial",
+    func=polynomial,
+    description=r"$D = a\,netOD + b\,netOD^n$",
+    param_names=["a", "b", "n"],
+    independent_variable = "netOD"
+)
+
+rational_fitting = FittingFunction(
+    name="rational",
+    func=rational,
+    description=r"$D = \frac{a\,netT}{1 - b\,netT}$",
+    param_names=["a", "b"],
+    independent_variable= "netT"
+)
+
+
+# Dictionary mapping function names to their corresponding FittingFunction instances.
+fitting_functions = {
+    "polynomial": polynomial_fitting,
+    "rational": rational_fitting,
+}
+
+def get_fitting_function(name: str) -> FittingFunction:
+    """
+    Retrieves the FittingFunction instance by name.
     
     Parameters
     ----------
     name : str
-        The name of the fitting function (e.g., "exponential").
+        The name of the fitting function (e.g., "polynomial").
     
     Returns
     -------
-    tuple
-        A tuple (function, description_text) if the function exists; otherwise, (None, None).
+    FittingFunction
+        The corresponding FittingFunction instance if found; otherwise, None.
     """
-    func = fitting_functions.get(name)
-    text = fitting_function_texts.get(name, "")
-    return func, text
+    return fitting_functions.get(name)

@@ -7,7 +7,7 @@ from sklearn.metrics import r2_score
 
 class FilmCalibration:
 
-    def __init__(self, groundtruth_image: np.ndarray, calibration_type: str = 'single-channel', fitting_function_name: str = 'exponential'):
+    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, calibration_type: str = 'single-channel', fitting_function_name: str = 'rational'):
         """
         Initializes the film calibration process by defining the ground truth image
         and the calibration type.
@@ -21,18 +21,18 @@ class FilmCalibration:
             Calibration type ('single-channel' or 'multi-channel'). Default is 'single-channel'.
         """
         self.groundtruth_image = groundtruth_image
+        self.bits_per_channel = bits_per_channel
         self.calibration_type = calibration_type
         self.doses = {}           # Dictionary mapping dose value to a CalibrationDose object
         # Global PV_before per channel, defined as the PV_after of dose 0 for each channel.
         self.pixel_values_before = [None, None, None]
-        self.dose_to_netOD_by_channel = []
-
+        #self.dose_to_netOD_by_channel = []
+        self.dose_to_independent_by_channel = []  
         self.parameters = None
-        # Fitting function (to be defined according to the calibration method)
-        self.fitting_function_name = fitting_function_name  
-        func, text = get_fitting_function(fitting_function_name)
-        self.fitting_function = func
-        self.fitting_function_text = text
+        self.uncertainties = None  # Will store the uncertainties (standard deviations) of the parameters
+
+        # Retrieve the FittingFunction instance
+        self.fitting_func_instance = get_fitting_function(fitting_function_name)
 
     def add_roi(self, dose: float, x: int, y: int, size: int):
         """
@@ -81,47 +81,27 @@ class FilmCalibration:
             print(f"Dosis: {calib_dose.value} Gy")
             print(f"ROIs: {calib_dose.rois} \n")
             
-
-    def compute_channel_netODs(self, channel: int = 0) -> dict:
+    def compute_channel_independent_values(self, channel: int = 0) -> dict:
         """
-        Computes the net optical density (netOD) for each dose using the global PV_before.
-        PV_before is defined as the PV_after of the dose with value 0.
-        
-        Parameters
-        ----------
-        channel : int, optional
-            The image channel to use for computation (default is 0).
-        
-        Returns
-        -------
-        dict
-            A dictionary where the key is the dose value and the value is the computed netOD.
-        
-        Raises
-        ------
-        ValueError
-            If PV_before is not defined.
+        Computes the independent variable (e.g., netOD or netT) for each dose using the global PV_before.
         """
-        # Ensure that the dose 0 exists and its PV_after is computed.
         if 0 not in self.doses:
             raise ValueError("Dose 0 must be defined in order to obtain pixel_values_before.")
         
-        # Compute average PV for all doses first.
+        # First, compute the average pixel value for all doses.
         for dose, calib_dose in self.doses.items():
-            pv = calib_dose.compute_average_pv(channel)
+            calib_dose.compute_average_pv(channel)
 
-        # Set the global PV_before for the channel using dose 0.
+        # Set the global pixel value before exposure (using dose 0).
         self.pixel_values_before[channel] = self.doses[0].pixel_values_after.get(channel, None)
         if self.pixel_values_before[channel] is None:
-            raise ValueError("PV_before (from dose 0) for channel {} is not defined.".format(channel))
+            raise ValueError(f"PV_before (from dose 0) for channel {channel} is not defined.")
         
-
-        # Compute the netOD for each dose.
-        dose_to_netOD = {}
+        dose_to_value = {}
         for dose, calib_dose in self.doses.items():
-            dose_to_netOD[dose] = calib_dose.compute_netOD(self.pixel_values_before, channel)
+            dose_to_value[dose] = calib_dose.compute_independent_value(self.pixel_values_before, channel)
 
-        return dict(sorted(dose_to_netOD.items()))
+        return dict(sorted(dose_to_value.items()))
 
     def calibrate(self, calibration_type: str = 'single-channel'):
         """
@@ -156,104 +136,77 @@ class FilmCalibration:
         if 0 not in self.doses:
             raise ValueError("Dose 0 must be defined to set pixel_values_before.")
 
-        dose_to_netOD_by_channel = []
+        dose_to_independent_by_channel = []
         parameters = []
+        uncertainties = []
         for channel in range(0, 3):
-            
-            dose_to_netOD = self.compute_channel_netODs(channel)
-            dose_to_netOD_by_channel.append(dose_to_netOD)
+            dose_to_independent = self.compute_channel_independent_values(channel)
+            dose_to_independent_by_channel.append(dose_to_independent)
 
             # Prepare lists for curve fitting.
             # The keys of netODs are the dose values.
-            dose_list = np.array(list(dose_to_netOD.keys()))
-            netOD_list = np.array(list(dose_to_netOD.values()))
+            dose_list = np.array(list(dose_to_independent.keys()))
+            independent_list = np.array(list(dose_to_independent.values()))
         
-            # Fit the calibration function to the data:
-            popt, pcov = curve_fit(self.fitting_function, netOD_list, dose_list,
-                                p0=[1.0, 1.0, 1.0], maxfev=5000)
-            a_opt, b_opt, n_opt = popt
-            parameters.append(popt)
+            # Determine initial parameter guess based on the number of parameters.
+            num_params = len(self.fitting_func_instance.param_names)
+            p0 = [1.0] * num_params
 
-        self.dose_to_netOD_by_channel = dose_to_netOD_by_channel
+            # Fit the calibration function to the data:
+            popt, pcov = curve_fit(self.fitting_func_instance.func, independent_list, dose_list,
+                                p0=p0, maxfev=5000)
+            parameters.append(popt)
+            # Calculate uncertainties as the square root of the diagonal of the covariance matrix.
+            uncertainties.append(np.sqrt(np.diag(pcov)))
+
+
+        self.dose_to_independent_by_channel = dose_to_independent_by_channel
         self.parameters = parameters
+        self.uncertainties = uncertainties
+
         return parameters
 
-
     def graph_calibration_curve(self):
-
+        """
+        Graphs the calibration curves for each channel.
+        The x-axis corresponds to the independent variable (e.g., netOD, netT) and
+        the y-axis corresponds to the dose.
+        """
         colors = ['r', 'g', 'b']
-        channels = ['R', 'G', 'B']
-
         plt.figure(figsize=(8, 6))
 
-        for i, (dose_to_netOD) in enumerate(self.dose_to_netOD_by_channel):
-
-            dose_list = np.array(list(dose_to_netOD.keys()))
-            netOD_list = np.array(list(dose_to_netOD.values()))
+        for i, dose_to_x in enumerate(self.dose_to_independent_by_channel):
+            dose_list = np.array(list(dose_to_x.keys()))
+            x_list = np.array(list(dose_to_x.values()))
         
             popt = self.parameters[i]
-            a_opt, b_opt, n_opt = popt
+            uncert = self.uncertainties[i]
 
-            # Curva ajustada
-            netOD_fit = np.linspace(min(netOD_list), max(netOD_list), 300)
-            dose_fit = self.fitting_function(netOD_fit, a_opt, b_opt, n_opt)
+            x_fit = np.linspace(min(x_list), max(x_list), 300)
+            dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
-            dose_predicted = self.fitting_function(netOD_list, *popt)
+            dose_predicted = self.fitting_func_instance.func(x_list, *popt)
             r2 = r2_score(dose_list, dose_predicted)
 
-            # TODO: cambiar
-            text = f"a={a_opt:.4f}\n b={b_opt:.4f}\n n={n_opt:.4f}\n R²={r2:.4f}",
+            # Generate label text with parameter values and uncertainties.
+            label_text = "\n".join(
+                f"{name}={p:.3f}±{u:.3f}" 
+                for name, p, u in zip(self.fitting_func_instance.param_names, popt, uncert)
+            )
+            label_text += f"\nR²={r2:.3f}"
 
-            # Graficar datos experimentales y curva de ajuste para cada canal
-            plt.scatter(netOD_list, dose_list, color=colors[i])
-            plt.plot(netOD_fit, dose_fit, color=colors[i], linestyle='--', label=text)
+            plt.scatter(x_list, dose_list, color=colors[i])
+            plt.plot(x_fit, dose_fit, color=colors[i], linestyle='--', label=label_text)
 
-
-        plt.title(f"Curvas de calibración  {self.fitting_function_text}")
-        plt.ylabel("Net Optical Density (netOD)")
-        plt.xlabel("Dosis (Gy)")
-        plt.legend()
+        plt.title(f"Calibration Curves {self.fitting_func_instance.description}")
+        plt.ylabel("Dose (Gy)")
+        plt.xlabel(self.fitting_func_instance.independent_variable)
+        # Position the legend outside the plot to the right
+        plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
         plt.show()
 
-    def graph_response_curve(self):
-
-        colors = ['r', 'g', 'b']
-        channels = ['R', 'G', 'B']
-
-        plt.figure(figsize=(8, 6))
-
-        for i, (dose_to_netOD) in enumerate(self.dose_to_netOD_by_channel):
-
-            dose_list = np.array(list(dose_to_netOD.keys()))
-            netOD_list = np.array(list(dose_to_netOD.values()))
-        
-            popt = self.parameters[i]
-            a_opt, b_opt, n_opt = popt
-
-            # Curva ajustada
-            netOD_fit = np.linspace(min(netOD_list), max(netOD_list), 300)
-            dose_fit = self.fitting_function(netOD_fit, a_opt, b_opt, n_opt)
-            
-            dose_predicted = self.fitting_function(netOD_list, *popt)
-            r2 = r2_score(dose_list, dose_predicted)
-            
-            # TODO: cambiar
-            text = f"a={a_opt:.4f}\n b={b_opt:.4f}\n n={n_opt:.4f}\n R²={r2:.4f}",
-
-            # Graficar datos experimentales y curva de ajuste para cada canal
-            plt.scatter(dose_list, netOD_list, color=colors[i])
-            plt.plot(dose_fit, netOD_fit, color=colors[i], linestyle='--', label=text)
-
-
-        plt.title(f"Curvas de respuesta  {self.fitting_function_text}")
-        plt.xlabel("Net Optical Density (netOD)")
-        plt.ylabel("Dosis (Gy)")
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-
+    
     def __repr__(self):
         return (f"FilmCalibration(NumDoses={self.get_total_dose_count()}, "
                 f"NumROIs={self.get_total_roi_count()}, Type={self.calibration_type})")
