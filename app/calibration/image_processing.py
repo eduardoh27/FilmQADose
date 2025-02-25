@@ -241,3 +241,4 @@ def crop_square_roi(image, x, y, side_length):
 
     roi = image[y:y+side_length, x:x+side_length]
     return roi
+

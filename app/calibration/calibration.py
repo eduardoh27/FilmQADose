@@ -8,7 +8,7 @@ from sklearn.metrics import r2_score
 class FilmCalibration:
 
     def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
-                calibration_type: str = 'single-channel', fitting_function_name: str = 'rational',
+                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
                 filter_type=None):
         """
         Initializes the film calibration process by defining the ground truth image
@@ -153,11 +153,11 @@ class FilmCalibration:
         
             # Determine initial parameter guess based on the number of parameters.
             num_params = len(self.fitting_func_instance.param_names)
-            p0 = [1.0] * num_params
+            p0 = [5.0] * num_params
 
             # Fit the calibration function to the data:
             popt, pcov = curve_fit(self.fitting_func_instance.func, independent_list, dose_list,
-                                p0=p0, maxfev=5000)
+                                p0=p0, maxfev=10000)
             parameters.append(popt)
             # Calculate uncertainties as the square root of the diagonal of the covariance matrix.
             uncertainties.append(np.sqrt(np.diag(pcov)))
@@ -169,7 +169,64 @@ class FilmCalibration:
 
         return parameters
 
-    def graph_calibration_curve(self):
+    def get_metric(self, metric_name: str, channel: int = None):
+        """
+        Computes the specified metric for the calibration curve(s) and returns a tuple containing the metric value and its formatted name.
+
+        Parameters
+        ----------
+        metric_name : str
+            The metric to compute. Options are:
+            - 'r2' or 'r^2' for the coefficient of determination,
+            - 'rmse' for the root mean square error,
+            - 'mse' for the mean square error,
+            - 'chi2', 'chi-squared', or 'chi^2' for the chi-squared value.
+        channel : int, optional
+            The channel index for which to compute the metric. If None, returns a dictionary mapping channel indices to (value, formatted name) tuples.
+
+        Returns
+        -------
+        tuple or dict
+            A tuple (metric_value, formatted_metric_name) if channel is specified,
+            otherwise a dictionary mapping channel indices to such tuples.
+        """
+        if self.parameters is None or not self.dose_to_independent_by_channel:
+            raise ValueError("Calibration parameters have not been computed. Please run calibrate() first.")
+
+        def compute_for_channel(ch):
+            dose_to_x = self.dose_to_independent_by_channel[ch]
+            dose_list = np.array(list(dose_to_x.keys()))
+            x_list = np.array(list(dose_to_x.values()))
+            popt = self.parameters[ch]
+            dose_predicted = self.fitting_func_instance.func(x_list, *popt)
+            
+            metric = metric_name.lower()
+            if metric in ['r2', 'r^2']:
+                value = r2_score(dose_list, dose_predicted)
+                formatted = "R²"
+            elif metric in ['RMSE', 'rmse']:
+                value = np.sqrt(np.mean((dose_list - dose_predicted) ** 2))
+                formatted = "RMSE"
+            elif metric in ['MSE', 'mse']:
+                value = np.mean((dose_list - dose_predicted) ** 2)
+                formatted = "MSE"
+            elif metric in ['chi2', 'chi-squared', 'chi squared', 'chi^2']:
+                value = np.sum((dose_list - dose_predicted) ** 2)
+                formatted = "χ²"
+            else:
+                raise ValueError("Metric not recognized. Available metrics: 'r2', 'rmse', 'mse', and 'chi2'.")
+            return value, formatted
+
+        if channel is not None:
+            return compute_for_channel(channel)
+        else:
+            metrics = {}
+            for ch in range(len(self.parameters)):
+                metrics[ch] = compute_for_channel(ch)
+            return metrics
+
+
+    def graph_calibration_curve(self, metric_name='r2'):
         """
         Graphs the calibration curves for each channel.
         The x-axis corresponds to the independent variable (e.g., netOD, netT) and
@@ -179,24 +236,27 @@ class FilmCalibration:
         plt.figure(figsize=(8, 6))
 
         for i, dose_to_x in enumerate(self.dose_to_independent_by_channel):
+
             dose_list = np.array(list(dose_to_x.keys()))
             x_list = np.array(list(dose_to_x.values()))
         
             popt = self.parameters[i]
             uncert = self.uncertainties[i]
 
-            x_fit = np.linspace(min(x_list), max(x_list), 300)
+            x_fit = np.linspace(min(x_list), max(x_list) + (max(x_list)-min(x_list))*0.05, 300)
             dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
-            r2 = r2_score(dose_list, dose_predicted)
+
+            # Compute metrics using the new get_metric method.
+            metric_value, metric_text = self.get_metric(metric_name, channel=i)
 
             # Generate label text with parameter values and uncertainties.
             label_text = "\n".join(
                 f"{name}={p:.3f}±{u:.3f}" 
                 for name, p, u in zip(self.fitting_func_instance.param_names, popt, uncert)
             )
-            label_text += f"\nR²={r2:.3f}"
+            label_text += f"\n{metric_text}={metric_value:.3f}"
 
             plt.scatter(x_list, dose_list, color=colors[i])
             plt.plot(x_fit, dose_fit, color=colors[i], linestyle='--', label=label_text)

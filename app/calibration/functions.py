@@ -91,11 +91,23 @@ rational_fitting = FittingFunction(
     independent_variable= "netT"
 )
 
+def cuadratic(x, a, b, c):
+    return a * x**2 + b * x + c 
+
+cuadratic_fitting = FittingFunction(
+    name="cuadratic",
+    func=cuadratic,
+    description=r"$D = a\,netOD^2 + b\,netOD + c$",
+    param_names=["a", "b", "c"],
+    independent_variable= "netOD"
+)
+
 
 # Dictionary mapping function names to their corresponding FittingFunction instances.
 fitting_functions = {
     "polynomial": polynomial_fitting,
     "rational": rational_fitting,
+    "cuadratic": cuadratic_fitting
 }
 
 def get_fitting_function(name: str) -> FittingFunction:
