@@ -7,7 +7,7 @@ of independent variables ("x") that can be used (e.g., netOD, netT, reflectance)
 """
 
 class FittingFunction:
-    def __init__(self, name: str, func, description: str, param_names: list, independent_variable: str):
+    def __init__(self, name: str, func, initial_param_guess: list, description: str, param_names: list, independent_variable: str):
         """
         Initializes a FittingFunction instance.
 
@@ -27,6 +27,7 @@ class FittingFunction:
         """
         self.name = name
         self.func = func
+        self.initial_param_guess = initial_param_guess
         self.description = description
         self.param_names = param_names
         self.independent_variable = independent_variable
@@ -78,6 +79,7 @@ def rational(x, a, b):
 polynomial_fitting = FittingFunction(
     name="polynomial",
     func=polynomial,
+    initial_param_guess=[1.0, 1.0, 1.0],
     description=r"$D = a\,netOD + b\,netOD^n$",
     param_names=["a", "b", "n"],
     independent_variable = "netOD"
@@ -86,6 +88,7 @@ polynomial_fitting = FittingFunction(
 rational_fitting = FittingFunction(
     name="rational",
     func=rational,
+    initial_param_guess=[2.0, 2.0],
     description=r"$D = \frac{a\,netT}{1 - b\,netT}$",
     param_names=["a", "b"],
     independent_variable= "netT"
@@ -97,6 +100,7 @@ def cuadratic(x, a, b, c):
 cuadratic_fitting = FittingFunction(
     name="cuadratic",
     func=cuadratic,
+    initial_param_guess=[1.0, 1.0, 1.0],
     description=r"$D = a\,netOD^2 + b\,netOD + c$",
     param_names=["a", "b", "c"],
     independent_variable= "netOD"

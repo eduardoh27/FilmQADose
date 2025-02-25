@@ -3,12 +3,12 @@ from scipy.optimize import curve_fit
 from calibration.functions import get_fitting_function
 from calibration.dose import CalibrationDose
 import matplotlib.pyplot as plt
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error 
 
 class FilmCalibration:
 
     def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
-                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
+                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial  ',
                 filter_type=None):
         """
         Initializes the film calibration process by defining the ground truth image
@@ -153,7 +153,7 @@ class FilmCalibration:
         
             # Determine initial parameter guess based on the number of parameters.
             num_params = len(self.fitting_func_instance.param_names)
-            p0 = [5.0] * num_params
+            p0 = self.fitting_func_instance.initial_param_guess
 
             # Fit the calibration function to the data:
             popt, pcov = curve_fit(self.fitting_func_instance.func, independent_list, dose_list,
@@ -205,10 +205,10 @@ class FilmCalibration:
                 value = r2_score(dose_list, dose_predicted)
                 formatted = "R²"
             elif metric in ['RMSE', 'rmse']:
-                value = np.sqrt(np.mean((dose_list - dose_predicted) ** 2))
+                value = root_mean_squared_error(dose_list, dose_predicted)
                 formatted = "RMSE"
             elif metric in ['MSE', 'mse']:
-                value = np.mean((dose_list - dose_predicted) ** 2)
+                value = mean_squared_error(dose_list, dose_predicted)
                 formatted = "MSE"
             elif metric in ['chi2', 'chi-squared', 'chi squared', 'chi^2']:
                 value = np.sum((dose_list - dose_predicted) ** 2)
@@ -243,7 +243,8 @@ class FilmCalibration:
             popt = self.parameters[i]
             uncert = self.uncertainties[i]
 
-            x_fit = np.linspace(min(x_list), max(x_list) + (max(x_list)-min(x_list))*0.05, 300)
+            # add small value for curve to get near the last point (needed in some cases)
+            x_fit = np.linspace(min(x_list), max(x_list) + 0.015, 300)
             dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
