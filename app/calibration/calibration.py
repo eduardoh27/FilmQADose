@@ -4,6 +4,7 @@ import json
 from scipy.optimize import curve_fit
 from calibration.functions import get_fitting_function
 from calibration.dose import CalibrationDose
+from calibration.image_processing import read_image, filter_image
 from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error 
 
 
@@ -271,6 +272,8 @@ class FilmCalibration:
         plt.grid(True)
         plt.show()
 
+
+
     def to_json(self, filename: str):
         """
         Exports the FilmCalibration instance to a JSON file.
@@ -295,6 +298,7 @@ class FilmCalibration:
             "bits_per_channel": self.bits_per_channel,
             "calibration_type": self.calibration_type,
             "filter_type": self.filter_type,
+            "pixel_values_before": [None if x is None else float(x) for x in self.pixel_values_before],
             "dose_to_independent_by_channel": self.dose_to_independent_by_channel,
             "parameters": [p.tolist() if isinstance(p, (np.ndarray, list)) else p for p in self.parameters] if self.parameters is not None else None,
             "uncertainties": [u.tolist() if isinstance(u, (np.ndarray, list)) else u for u in self.uncertainties] if self.uncertainties is not None else None,
@@ -340,6 +344,11 @@ class FilmCalibration:
             fitting_function_name=data.get("fitting_func_name"),
             filter_type=data.get("filter_type")
         )
+
+        # Cargar pixel_values_before, convirtiendo cada valor a np.float64 si no es None.
+        instance.pixel_values_before = [
+            None if x is None else np.float64(x) for x in data.get("pixel_values_before", [None, None, None])
+        ]
         
 
         # Convertir cada diccionario de dose_to_independent_by_channel:
@@ -362,7 +371,73 @@ class FilmCalibration:
         
         return instance
 
-    
+    def compute_dose_map(self, film_file: str, channel: int = 0) -> np.ndarray:
+        """
+        Carga una película irradiada desde un archivo .tif y calcula el mapa de dosis usando
+        el modelo calibrado y el método de un solo canal.
+
+        Parameters
+        ----------
+        film_file : str
+            Ruta al archivo .tif que contiene la película irradiada.
+        channel : int, optional
+            Canal de la imagen que se utilizará para calcular el mapa de dosis (por defecto 0).
+
+        Returns
+        -------
+        np.ndarray
+            Un arreglo 2D que representa el mapa de dosis calculado para la película.
+
+        Raises
+        ------
+        ValueError
+            Si el valor global PV_before para el canal indicado no está definido o si la 
+            variable independiente utilizada no es compatible.
+        """
+        # Cargar la imagen de la película
+        film_image = read_image(film_file)
+        
+        # Si la imagen tiene múltiples canales, seleccionar el canal indicado
+        if film_image.ndim == 3:
+            film_channel = film_image[:, :, channel]
+        else:
+            film_channel = film_image
+
+        # filter_image
+        if self.filter_type is not None:
+            film_channel = filter_image(film_channel, self.filter_type)
+
+        # Recuperar el valor global PV_before para el canal especificado (definido en la calibración, usualmente de dosis 0)
+        PV_before = self.pixel_values_before[channel]
+        if PV_before is None:
+            raise ValueError(f"El valor global PV_before para el canal {channel} no está definido. Asegúrese de calibrar incluyendo dosis 0.")
+
+        # Calcular la variable independiente para cada píxel, según la definición:
+        # - Si es 'netOD': netOD = log10(PV_before / PV_after)
+        # - Si es 'netT': netT = (PV_after - PV_before) / 2^(bits_per_channel)
+        independent_variable = self.fitting_func_instance.independent_variable
+        if independent_variable == "netOD":
+            # Evitar división por cero
+            film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)
+            x_map = np.log10(PV_before / film_channel_safe)
+        elif independent_variable == "netT":
+            x_map = (film_channel - PV_before) / (2 ** self.bits_per_channel)
+        else:
+            raise ValueError(f"Tipo de variable independiente no soportada: {independent_variable}")
+
+        # Recuperar los parámetros calibrados para el canal seleccionado.
+        # Se asume que self.parameters es una lista con un conjunto de parámetros para cada canal.
+        popt = self.parameters[channel]
+
+        # Aplicar la función de calibración con los parámetros optimizados para obtener el mapa de dosis.
+        dose_map = self.fitting_func_instance.func(x_map, *popt)
+
+        # cambiar nan por 0
+        dose_map = np.nan_to_num(dose_map)
+        
+        return dose_map
+
+
     def __repr__(self):
         return (f"FilmCalibration(NumDoses={self.get_total_dose_count()}, "
                 f"NumROIs={self.get_total_roi_count()}, Type={self.calibration_type})")

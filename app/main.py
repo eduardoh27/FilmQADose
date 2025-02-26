@@ -1,6 +1,5 @@
 import sys
 import os
-
 import numpy as np
 import pydicom
 
@@ -114,12 +113,15 @@ class FilmQADoseMainWindow(QMainWindow):
         """Create a default welcome tab showing Uniandes.png."""
         welcome_label = ScaledLabel()
 
-        image_path = os.path.join(os.path.dirname(__file__), "Uniandes.png")
+        image_path = os.path.join(os.path.dirname(__file__), 'media', "Uniandes.png")
+        print(image_path)
         welcome_pixmap = QPixmap(image_path)
 
         if not welcome_pixmap.isNull():
             welcome_label.setPixmap(welcome_pixmap)
+            print("Loaded Uniandes.png")
         else:
+            print("Could not load Uniandes.png")
             welcome_label.setText("Uniandes.png not found or could not be loaded.")
 
         # Store a basic metadata for the welcome tab
