@@ -1,14 +1,16 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import json
 from scipy.optimize import curve_fit
 from calibration.functions import get_fitting_function
 from calibration.dose import CalibrationDose
-import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error 
+
 
 class FilmCalibration:
 
     def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
-                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial  ',
+                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
                 filter_type=None):
         """
         Initializes the film calibration process by defining the ground truth image
@@ -33,7 +35,7 @@ class FilmCalibration:
         self.dose_to_independent_by_channel = []  
         self.parameters = None
         self.uncertainties = None  # Will store the uncertainties (standard deviations) of the parameters
-        
+        self.fitting_func_name = fitting_function_name
         # Retrieve the FittingFunction instance
         self.fitting_func_instance = get_fitting_function(fitting_function_name)
 
@@ -225,7 +227,6 @@ class FilmCalibration:
                 metrics[ch] = compute_for_channel(ch)
             return metrics
 
-
     def graph_calibration_curve(self, metric_name='r2'):
         """
         Graphs the calibration curves for each channel.
@@ -269,6 +270,97 @@ class FilmCalibration:
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
         plt.show()
+
+    def to_json(self, filename: str):
+        """
+        Exports the FilmCalibration instance to a JSON file.
+        Only the following attributes are saved:
+        - groundtruth_image (converted to list)
+        - bits_per_channel
+        - calibration_type
+        - filter_type
+        - dose_to_independent_by_channel
+        - parameters (converted to lists)
+        - uncertainties (converted to lists)
+        - fitting_func_name
+        Doses, pixel_values_before, and fitting_func_instance are NOT saved.
+        
+        Parameters
+        ----------
+        filename : str
+            The path to the JSON file where the instance will be saved.
+        """
+        data = {
+            "groundtruth_image": self.groundtruth_image.tolist(),
+            "bits_per_channel": self.bits_per_channel,
+            "calibration_type": self.calibration_type,
+            "filter_type": self.filter_type,
+            "dose_to_independent_by_channel": self.dose_to_independent_by_channel,
+            "parameters": [p.tolist() if isinstance(p, (np.ndarray, list)) else p for p in self.parameters] if self.parameters is not None else None,
+            "uncertainties": [u.tolist() if isinstance(u, (np.ndarray, list)) else u for u in self.uncertainties] if self.uncertainties is not None else None,
+            "fitting_func_name": self.fitting_func_name
+        }
+        with open(filename, 'w') as f:
+            json.dump(data, f)
+
+    @classmethod
+    def from_json(cls, filename: str):
+        """
+        Loads a FilmCalibration instance from a JSON file.
+        The JSON must contain the keys:
+        - groundtruth_image
+        - bits_per_channel
+        - calibration_type
+        - filter_type
+        - dose_to_independent_by_channel
+        - parameters
+        - uncertainties
+        - fitting_func_name
+        Note: Doses, pixel_values_before, and fitting_func_instance are not stored;
+        fitting_func_instance is re-initialized using the fitting_func_name.
+        
+        Parameters
+        ----------
+        filename : str
+            The path to the JSON file to load.
+        
+        Returns
+        -------
+        FilmCalibration
+            The reconstructed FilmCalibration instance.
+        """
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        
+        groundtruth_image = np.array(data["groundtruth_image"])
+        instance = cls(
+            groundtruth_image=groundtruth_image,
+            bits_per_channel=data.get("bits_per_channel"),
+            calibration_type=data.get("calibration_type"),
+            fitting_function_name=data.get("fitting_func_name"),
+            filter_type=data.get("filter_type")
+        )
+        
+
+        # Convertir cada diccionario de dose_to_independent_by_channel:
+        dose_to_independent_by_channel = data.get("dose_to_independent_by_channel", [])
+        instance.dose_to_independent_by_channel = [
+            {float(k): np.float64(v) for k, v in d.items()} for d in dose_to_independent_by_channel
+        ]
+
+        parameters = data.get("parameters")
+        if parameters is not None:
+            instance.parameters = [np.array(p) for p in parameters]
+        else:
+            instance.parameters = None
+
+        uncertainties = data.get("uncertainties")
+        if uncertainties is not None:
+            instance.uncertainties = [np.array(u) for u in uncertainties]
+        else:
+            instance.uncertainties = None
+        
+        return instance
 
     
     def __repr__(self):

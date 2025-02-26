@@ -21,7 +21,7 @@ class FittingFunction:
             A descriptive text (e.g., a LaTeX string) representing the fitting function.
         param_names : list
             A list of fitting parameter names (e.g., ["a", "b", "n"]).
-        x_types : list
+        independent_variable : str
             The independent variable of the function 
             (e.g., "netOD", "netT").
         """
@@ -34,7 +34,7 @@ class FittingFunction:
 
     def __repr__(self):
         return (f"FittingFunction(name={self.name}, "
-                f"param_names={self.param_names}, x_types={self.x_types})")
+                f"param_names={self.param_names}, independent_variable={self.independent_variable})")
 
 # Define the polynomial fitting function.
 def polynomial(x, a, b, n):
@@ -79,7 +79,7 @@ def rational(x, a, b):
 polynomial_fitting = FittingFunction(
     name="polynomial",
     func=polynomial,
-    initial_param_guess=[1.0, 1.0, 1.0],
+    initial_param_guess=[2.0, 2.0, 2.0],
     description=r"$D = a\,netOD + b\,netOD^n$",
     param_names=["a", "b", "n"],
     independent_variable = "netOD"
@@ -88,7 +88,7 @@ polynomial_fitting = FittingFunction(
 rational_fitting = FittingFunction(
     name="rational",
     func=rational,
-    initial_param_guess=[2.0, 2.0],
+    initial_param_guess=[1.0, 1.0],
     description=r"$D = \frac{a\,netT}{1 - b\,netT}$",
     param_names=["a", "b"],
     independent_variable= "netT"
