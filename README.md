@@ -48,7 +48,7 @@ To set up and run the application locally, make sure you have the following:
    ```
 2. **Navigate to the project folder**:
    ```bash
-   cd FilmQADose
+   cd app
    ```
 3. **Install dependencies**:
    ```bash
@@ -61,7 +61,7 @@ To set up and run the application locally, make sure you have the following:
 
 1. **From the root directory**, run:
    ```bash
-   python app/interfazFinal.py
+   python main.py
    ```
 2. A GUI window will open, allowing you to interact with FilmQADose.
 
