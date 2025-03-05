@@ -5,12 +5,6 @@
 
 > **FilmQADose** is an open-source software for the analysis of radiochromic films in radiation therapy QA (Quality Assurance). It provides intuitive calibration tools and dose map generation to promote accessible and efficient quality control.
 
----
-
-## About ⚡
-
-FilmQADose simplifies the workflow of radiochromic film analysis by combining a user-friendly interface with robust data processing. This helps clinicians and researchers perform precise film-based QA without expensive proprietary tools.
-
 **Development branch**: [pyside](https://github.com/eduardoh27/FilmQADose/tree/pyside) 
 
 ---
@@ -92,8 +86,3 @@ Feel free to report issues or suggest enhancements in the [Issues](https://githu
 This project is licensed under the terms specified in the [LICENSE](LICENSE) file.  
 Feel free to use, modify, and distribute it in accordance with the license.
 
----
-
-<p align="center">
-  Developed with ❤️ by Eduardo Herrera and the open-source community.
-</p>
