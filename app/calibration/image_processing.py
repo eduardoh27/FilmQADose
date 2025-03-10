@@ -8,7 +8,7 @@ from scipy.signal import convolve2d, wiener
 from scipy.signal.windows import gaussian
 from numpy.fft import fft2, ifft2
 
-def read_image(image_path):
+def read_image(image_path): 
     """
     Reads an image from the specified file path using skimage.io.
     Uses the 'pil' plugin for TIFF images.
@@ -93,7 +93,7 @@ def save_image(image, output_path):
     io.imsave(output_path, image)
 
 
-def filter_image(image: np.ndarray, filter_type: str = None) -> np.ndarray:
+def filter_image(image: np.ndarray, filter_type: str = None, kernel_size: int = 3) -> np.ndarray:
     """
     Apply a filtering or preprocessing operation to the given image.
 
@@ -117,7 +117,7 @@ def filter_image(image: np.ndarray, filter_type: str = None) -> np.ndarray:
     if image.ndim > 2 and image.shape[-1] > 1:
         raise ValueError("The input image must be single-channel (grayscale).")
 
-    def wiener_filter1(image, K=30):
+    def wiener_filter1(img, K=30):
         kernel_size = 3
         h = gaussian(kernel_size, kernel_size / 3).reshape(kernel_size, 1)
         h = np.dot(h, h.transpose())
@@ -136,13 +136,13 @@ def filter_image(image: np.ndarray, filter_type: str = None) -> np.ndarray:
         filtered = image
 
     elif filter_type == "median":
-        print("median")
-        filtered = median_filter(image, size=3)
+        filtered = median_filter(image, size=kernel_size)
 
     elif filter_type == "wiener":
-        print("wiener")
-        #filtered = wiener_filter(noisy_img)
-        filtered = wiener(image)
+        filtered = wiener(image, mysize=(kernel_size, kernel_size))
+    
+    elif filter_type == "wiener-manual":
+        filtered = wiener_filter1(image)
 
     return filtered
 

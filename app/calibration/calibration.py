@@ -12,7 +12,7 @@ class FilmCalibration:
 
     def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
                 calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
-                filter_type=None):
+                filter_type='median'):
         """
         Initializes the film calibration process by defining the ground truth image
         and the calibration type.
@@ -246,7 +246,7 @@ class FilmCalibration:
             uncert = self.uncertainties[i]
 
             # add small value for curve to get near the last point (needed in some cases)
-            x_fit = np.linspace(min(x_list), max(x_list) + 0.015, 300)
+            x_fit = np.linspace(min(x_list), max(x_list) + 0.012, 300)
             dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
@@ -264,15 +264,60 @@ class FilmCalibration:
             plt.scatter(x_list, dose_list, color=colors[i])
             plt.plot(x_fit, dose_fit, color=colors[i], linestyle='--', label=label_text)
 
-        plt.title(f"Calibration Curves {self.fitting_func_instance.description}")
-        plt.ylabel("Dose (Gy)")
-        plt.xlabel(self.fitting_func_instance.independent_variable)
+        plt.title(f"Calibration Curves {self.fitting_func_instance.description}", fontsize=14)
+        plt.ylabel("Dose (Gy)", fontsize=12)
+        plt.xlabel(self.fitting_func_instance.independent_variable, fontsize=12)
         # Position the legend outside the plot to the right
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
         plt.show()
 
+    def graph_response_curve(self, metric_name='r2'):
+        """
+        Graphs the response curves for each channel.
+        The x-axis corresponds to the dose (Gy) and the y-axis corresponds to the film response 
+        (e.g., netOD, netT), which is the independent variable.
+        
+        For each channel, the method numerically inverts the calibration function f(x, *params) 
+        (which returns dose for a given response x) to obtain x for a range of dose values.
+        """
+        colors = ['r', 'g', 'b']
+        plt.figure(figsize=(8, 6))
 
+        for i, dose_to_x in enumerate(self.dose_to_independent_by_channel):
+
+            dose_list = np.array(list(dose_to_x.keys()))
+            x_list = np.array(list(dose_to_x.values()))
+        
+            popt = self.parameters[i]
+            uncert = self.uncertainties[i]
+
+            # add small value for curve to get near the last point (needed in some cases)
+            x_fit = np.linspace(min(x_list), max(x_list) + 0.015, 300)
+            dose_fit = self.fitting_func_instance.func(x_fit, *popt)
+            
+            dose_predicted = self.fitting_func_instance.func(x_list, *popt)
+
+            # Compute metrics using the new get_metric method.
+            metric_value, metric_text = self.get_metric(metric_name, channel=i)
+
+            # Generate label text with parameter values and uncertainties.
+            label_text = "\n".join(
+                f"{name}={p:.3f}±{u:.3f}" 
+                for name, p, u in zip(self.fitting_func_instance.param_names, popt, uncert)
+            )
+            label_text += f"\n{metric_text}={metric_value:.3f}"
+
+            plt.scatter(dose_list, x_list, color=colors[i])
+            plt.plot(dose_fit, x_fit, color=colors[i], linestyle='--', label=label_text)
+
+        plt.title(f"Response Curves {self.fitting_func_instance.description}", fontsize=14)
+        plt.xlabel("Dose (Gy)", fontsize=12)
+        plt.ylabel(self.fitting_func_instance.independent_variable, fontsize=12)
+        # Position the legend outside the plot to the right
+        plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
+        plt.grid(True)
+        plt.show()
 
     def to_json(self, filename: str):
         """
