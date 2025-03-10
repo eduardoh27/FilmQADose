@@ -6,6 +6,7 @@ from calibration.functions import get_fitting_function
 from calibration.dose import CalibrationDose
 from calibration.image_processing import read_image, filter_image
 from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error 
+import cv2
 
 
 class FilmCalibration:
@@ -416,7 +417,7 @@ class FilmCalibration:
         
         return instance
 
-    def compute_dose_map(self, film_file: str, channel: int = 0) -> np.ndarray:
+    def compute_dose_map(self, film_file: str, channel: int = 0, new_size = 512) -> np.ndarray:
         """
         Carga una película irradiada desde un archivo .tif y calcula el mapa de dosis usando
         el modelo calibrado y el método de un solo canal.
@@ -441,6 +442,10 @@ class FilmCalibration:
         """
         # Cargar la imagen de la película
         film_image = read_image(film_file)
+
+        # resize image using scikit
+        film_image = cv2.resize(film_image, (new_size , new_size ), interpolation = cv2.INTER_NEAREST)
+
         
         # Si la imagen tiene múltiples canales, seleccionar el canal indicado
         if film_image.ndim == 3:

@@ -6,3 +6,4 @@ tifffile
 matplotlib
 scikit-learn
 opencv-python
+pymedphys
