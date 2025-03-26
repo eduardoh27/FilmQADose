@@ -11,7 +11,7 @@ import cv2
 
 class FilmCalibration:
 
-    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel = 8, 
+    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel =    8, 
                 calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
                 filter_type='median'):
         """
@@ -444,7 +444,7 @@ class FilmCalibration:
         film_image = read_image(film_file)
 
         # resize image using scikit
-        film_image = cv2.resize(film_image, (new_size , new_size ), interpolation = cv2.INTER_NEAREST)
+        #film_image = cv2.resize(film_image, (new_size , new_size ), interpolation = cv2.INTER_NEAREST)
 
         
         # Si la imagen tiene múltiples canales, seleccionar el canal indicado
@@ -471,7 +471,7 @@ class FilmCalibration:
             film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)
             x_map = np.log10(PV_before / film_channel_safe)
         elif independent_variable == "netT":
-            x_map = (film_channel - PV_before) / (2 ** self.bits_per_channel)
+            x_map = (film_channel - PV_before) # / (2 ** self.bits_per_channel)
         else:
             raise ValueError(f"Tipo de variable independiente no soportada: {independent_variable}")
 

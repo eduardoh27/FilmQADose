@@ -1,12 +1,31 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import tifffile
 import cv2
+import pydicom
+import os
 from skimage import io
 from skimage.util import img_as_float, img_as_ubyte, img_as_uint
 from scipy.ndimage import median_filter
 from scipy.signal import convolve2d, wiener
 from scipy.signal.windows import gaussian
 from numpy.fft import fft2, ifft2
+from PIL import Image
+from PIL.TiffTags import TAGS
+
+
+def tif_bits_per_channel(image_path):
+
+    with Image.open(image_path) as img:
+        meta_dict = {TAGS[key] : img.tag[key] for key in img.tag.keys()}
+        bits_per_sample = meta_dict.get('BitsPerSample', None)
+    
+        if bits_per_sample is None:
+            raise ValueError('No se encontró el tag BitsPerSample en la imagen.')
+        # si tiene más de un valor, verificar que todos sean iguales
+        elif len(set(bits_per_sample)) != 1:
+            raise ValueError('Los valores de BitsPerSample no son iguales.')
+        return bits_per_sample[0]
 
 def read_image(image_path): 
     """
@@ -24,13 +43,12 @@ def read_image(image_path):
         The loaded image as a NumPy array.
     """
     if image_path.lower().endswith('.tif') or image_path.lower().endswith('.tiff'):
-        image = io.imread(image_path, plugin='pil')
+        image = read_image_tif(image_path)
     else:
         image = io.imread(image_path)
     
     return image
 
-# TODO: check for 16 bit images
 def read_image_tif(image_path):
     """
     Reads an image from the specified file path using skimage.io.
@@ -46,15 +64,10 @@ def read_image_tif(image_path):
     image : ndarray
         The loaded image as a NumPy array.
     """
-    if image_path.lower().endswith('.tif') or image_path.lower().endswith('.tiff'):
-        cvImage = cv2.imread('Dosis0a10.tif', -1)
-        cvImage = cv2.cvtColor(cvImage, cv2.COLOR_BGR2RGB)
-        image = img_as_uint(cvImage)
-    else:
-        image = io.imread(image_path)
+    #image = io.imread(image_path, plugin='pil')
 
-    print(image.max())
-    
+    image = tifffile.imread(image_path)
+    image = image / (2**tif_bits_per_channel(image_path) - 1)
     return image
 
 
@@ -77,7 +90,6 @@ def show_image(image, title=None, show_labels=True, show_axis=True):
     plt.show()
 
     return image
-
 
 def save_image(image, output_path):
     """
@@ -242,3 +254,183 @@ def crop_square_roi(image, x, y, side_length):
     roi = image[y:y+side_length, x:x+side_length]
     return roi
 
+
+def get_real_dimensions(image_path):
+
+    ext = os.path.splitext(image_path)[-1].lower()
+
+    if ext in [".tif", ".tiff"]:
+        # Cargar la imagen TIFF
+        img = Image.open(image_path)
+
+        # Obtener resolución en DPI (dots per inch)
+        dpi = img.info.get("dpi", (300, 300))  # Si no hay dpi, asumir 300 ppp por defecto
+
+        # Obtener dimensiones en píxeles
+        width_px, height_px = img.size
+
+        # Convertir a centímetros (1 pulgada = 2.54 cm)
+        width_cm = (width_px / dpi[0]) * 2.54
+        height_cm = (height_px / dpi[1]) * 2.54
+
+        return width_cm, height_cm
+
+    elif ext in [".dcm"]:
+        # Cargar la imagen DICOM
+        ds = pydicom.dcmread(image_path)
+
+        # Obtener el tamaño de la imagen en píxeles
+        rows = ds.Rows
+        cols = ds.Columns
+
+        # Obtener el tamaño del píxel en mm (PixelSpacing contiene [espaciado fila, espaciado columna])
+        if hasattr(ds, "PixelSpacing"):
+            pixel_spacing = ds.PixelSpacing  
+            width_cm = (cols * float(pixel_spacing[0])) / 10
+            height_cm = (rows * float(pixel_spacing[1])) / 10
+
+            return width_cm, height_cm
+        else:
+            raise ValueError("DICOM - No se encontró información de PixelSpacing.")
+
+    else:
+        raise ValueError("Formato no soportado. Usa TIFF o DICOM.")
+
+
+def template_matching(TPS_map_path, film_tif_path, output_path):
+
+    # Rutas a los archivos
+    imageA_path = TPS_map_path
+    film_tif_full_path = film_tif_path
+
+    # Cargar el mapa de dosis (imagen A) desde DICOM
+    imageA = pydicom.dcmread(imageA_path).pixel_array
+    imageA = imageA.astype(np.float32)
+
+    # Cargar la imagen TIFF original (se preservan sus propiedades)
+    film_orig = tifffile.imread(film_tif_full_path)
+
+    # Para el procesamiento se utiliza el canal verde si es multicanal;
+    # de lo contrario se usa una copia de la imagen original
+    if film_orig.ndim == 3:
+        imageB = film_orig[:, :, 1]
+    else:
+        imageB = film_orig.copy()
+    imageB = imageB.astype(np.float32)
+
+    # Verificar que los arrays se hayan cargado correctamente
+    if imageA is None or imageA.size == 0:
+        print(f'Error al cargar la imagen A desde {imageA_path}')
+    if imageB is None or imageB.size == 0:
+        print(f'Error al cargar la imagen B desde {film_tif_full_path}')
+
+    # Asumir que las imágenes son matrices 2D
+    heightA, widthA = imageA.shape
+    heightB, widthB = imageB.shape
+
+    # Obtener dimensiones reales en cm (se asume que get_real_dimensions está definida)
+    widthA_cm, heightA_cm = get_real_dimensions(imageA_path)
+    print("Dimensiones imagen A (cm):", widthA_cm, heightA_cm)
+    widthB_cm, heightB_cm = get_real_dimensions(film_tif_full_path)
+    print("Dimensiones imagen B (cm):", widthB_cm, heightB_cm)
+
+    # Calcular la resolución en píxeles por cm para cada imagen
+    resolutionA_x = widthA / widthA_cm
+    resolutionA_y = heightA / heightA_cm
+    resolutionB_x = widthB / widthB_cm
+    resolutionB_y = heightB / heightB_cm
+
+    print(f'Resolución de la imagen A: {resolutionA_x:.2f} px/cm x {resolutionA_y:.2f} px/cm')
+    print(f'Resolución de la imagen B: {resolutionB_x:.2f} px/cm x {resolutionB_y:.2f} px/cm')
+
+    # Si las resoluciones difieren, reescalar la imagen A para igualar la escala física
+    if abs(resolutionA_x - resolutionB_x) > 1e-2 or abs(resolutionA_y - resolutionB_y) > 1e-2:
+        new_widthA = int(widthA_cm * resolutionB_x)
+        new_heightA = int(heightA_cm * resolutionB_y)
+        imageA = cv2.resize(imageA, (new_widthA, new_heightA), interpolation=cv2.INTER_LINEAR)
+        print(f'Reescalada de la imagen A a: {new_widthA}x{new_heightA} píxeles')
+
+    # Normalización de ambas imágenes al rango [0, 1]
+    imageA = cv2.normalize(imageA, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+    imageB = cv2.normalize(imageB, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+    # Transformar la imagen B para template matching:
+    # Se aplica: 1) reflejo horizontal y 2) rotación 180°.
+    # Estas operaciones son equivalentes a un volteo vertical.
+    imageB_trans = cv2.flip(imageB, 1)
+    imageB_trans = cv2.rotate(imageB_trans, cv2.ROTATE_180)
+    # Invertir intensidades (lo oscuro pasa a ser blanco y viceversa)
+    imageB_trans = 1.0 - imageB_trans
+
+    # Mostrar las imágenes transformadas (para template matching) 
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    im1 = axs[0].imshow(imageA, cmap='gray')
+    axs[0].set_title("Imagen A (Template)")
+    axs[0].axis("off")
+    fig.colorbar(im1, ax=axs[0])
+    im2 = axs[1].imshow(imageB_trans, cmap='gray')
+    axs[1].set_title("Imagen B transformada e invertida")
+    axs[1].axis("off")
+    fig.colorbar(im2, ax=axs[1])
+    plt.show()
+
+    # Aplicar template matching (método TM_CCOEFF_NORMED)
+    result = cv2.matchTemplate(imageB_trans, imageA, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    print(f'Valor máximo de correlación: {max_val:.3f}')
+    print(f'Ubicación en la imagen transformada (esquina superior izquierda): {max_loc}')
+
+    # Tamaño del template (imagen A)
+    template_height, template_width = imageA.shape
+
+    # Dado que la transformación aplicada a imageB es equivalente a un volteo vertical,
+    # la relación entre las coordenadas en imageB_trans y la imagen original (film_orig) es:
+    #   (x, y)_orig = (x, H - y - template_height)  para la esquina superior izquierda.
+    # Se utiliza H = heightB (la altura de la imagen B original).
+    H = heightB  
+    col_t, row_t = max_loc
+    orig_top = H - row_t - template_height
+    orig_left = col_t
+    orig_bottom = H - row_t
+    orig_right = col_t + template_width
+
+    print(f'Coordenadas en la imagen original para el recorte:')
+    print(f'  Esquina superior izquierda: ({orig_left}, {orig_top})')
+    print(f'  Esquina inferior derecha: ({orig_right}, {orig_bottom})')
+
+    # Para visualizar el bounding box sobre la imagen original:
+    # Convertir film_orig a 8 bits para visualización (manteniendo canales si existen)
+    if film_orig.ndim == 3:
+        # Si la imagen ya es de 8 bits, se usa directamente; de lo contrario se normaliza
+        if film_orig.dtype != np.uint8:
+            film_disp = cv2.normalize(film_orig, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        else:
+            film_disp = film_orig.copy()
+    else:
+        film_disp = cv2.normalize(film_orig, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        film_disp = cv2.cvtColor(film_disp, cv2.COLOR_GRAY2BGR)
+        
+    # Dibujar el bounding box sobre la imagen original
+    cv2.rectangle(film_disp, (orig_left, orig_top), (orig_right, orig_bottom), (0, 0, 255), 2)
+    plt.figure(figsize=(6,6))
+    # Convertir de BGR a RGB para matplotlib (si es a color)
+    if film_disp.ndim == 3:
+        film_disp_rgb = cv2.cvtColor(film_disp, cv2.COLOR_BGR2RGB)
+        plt.imshow(film_disp_rgb)
+    else:
+        plt.imshow(film_disp, cmap='gray')
+    plt.title("Imagen original con bounding box")
+    plt.axis("off")
+    plt.show()
+
+    # Recortar la región encontrada en la imagen original (sin transformación)
+    cropped = film_orig[orig_top:orig_bottom, orig_left:orig_right].copy()
+    
+    # Ahora, para que el recorte tenga la misma orientación que la imagen transformada,
+    # se aplica el mismo proceso: reflejo horizontal y rotación 180°.
+    cropped_trans = cv2.flip(cropped, 1)
+    cropped_trans = cv2.rotate(cropped_trans, cv2.ROTATE_180)
+
+    # Guardar el recorte transformado como TIFF (se preservan las propiedades en la medida de lo posible)
+    tifffile.imwrite(output_path, cropped_trans)
+    print(f'Imagen recortada (reflejada y rotada) guardada como {output_path}')

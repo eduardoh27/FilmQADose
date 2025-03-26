@@ -6,4 +6,12 @@ tifffile
 matplotlib
 scikit-learn
 opencv-python
+
 pymedphys
+imagecodecs
+
+pylibjpeg 
+pylibjpeg-libjpeg 
+pylibjpeg-openjpeg
+
+interpolation

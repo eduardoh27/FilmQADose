@@ -99,7 +99,7 @@ class CalibrationDose:
         elif independent_variable == 'netT':
             bits_per_channel = self.calibration.bits_per_channel
             # netT = (PV_after - PV_before) / 2^(bits_per_channel)
-            value = np.abs(self.pixel_values_after[channel] - pixel_values_before[channel]) / (2 ** bits_per_channel)
+            value = np.abs(self.pixel_values_after[channel] - pixel_values_before[channel]) # / (2 ** bits_per_channel)
         else:
             raise ValueError(f"Unsupported independent variable type: {independent_variable}")
             
