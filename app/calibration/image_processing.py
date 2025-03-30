@@ -6,8 +6,10 @@ import pydicom
 import os
 from skimage import io
 from skimage.util import img_as_float, img_as_ubyte, img_as_uint
+from skimage.restoration import unsupervised_wiener, wiener
 from scipy.ndimage import median_filter
-from scipy.signal import convolve2d, wiener
+from scipy.signal import convolve2d
+from scipy.signal import wiener as wiener_scipy
 from scipy.signal.windows import gaussian
 from numpy.fft import fft2, ifft2
 from PIL import Image
@@ -67,6 +69,8 @@ def read_image_tif(image_path):
     #image = io.imread(image_path, plugin='pil')
 
     image = tifffile.imread(image_path)
+    # Decir los bits por canal (8, 16 o 32 bits)
+    print(f"Bits per channel: {tif_bits_per_channel(image_path)}")
     image = image / (2**tif_bits_per_channel(image_path) - 1)
     return image
 
@@ -129,20 +133,6 @@ def filter_image(image: np.ndarray, filter_type: str = None, kernel_size: int = 
     if image.ndim > 2 and image.shape[-1] > 1:
         raise ValueError("The input image must be single-channel (grayscale).")
 
-    def wiener_filter1(img, K=30):
-        kernel_size = 3
-        h = gaussian(kernel_size, kernel_size / 3).reshape(kernel_size, 1)
-        h = np.dot(h, h.transpose())
-        h /= np.sum(h)
-        kernel = h
-        kernel /= np.sum(kernel)
-        transformed = fft2(np.copy(img))
-        kernel = fft2(kernel, s = img.shape)
-        kernel = np.conj(kernel) / (np.abs(kernel) ** 2 + K)
-        transformed = transformed * kernel
-        wiener = np.abs(ifft2(transformed))
-        return wiener
-
 
     if filter_type is None:
         filtered = image
@@ -150,11 +140,24 @@ def filter_image(image: np.ndarray, filter_type: str = None, kernel_size: int = 
     elif filter_type == "median":
         filtered = median_filter(image, size=kernel_size)
 
-    elif filter_type == "wiener":
-        filtered = wiener(image, mysize=(kernel_size, kernel_size))
+    elif filter_type == "wiener-scipy":
+        filtered = wiener_scipy(image, mysize=(kernel_size, kernel_size))
     
     elif filter_type == "wiener-manual":
-        filtered = wiener_filter1(image)
+        filtered = wiener_filter_manual(image)
+
+    elif filter_type == "wiener-skimage-1":
+        k = kernel_size
+        psf = np.ones((k,k)) / (k*k)
+        filtered, _ = unsupervised_wiener(image, psf)
+
+    elif filter_type == "wiener-skimage-2" or filter_type == "wiener":
+        k = kernel_size
+        psf = np.ones((k,k)) / (k*k)
+        filtered = wiener(image, psf, balance=0.35)
+    
+    else:
+        raise ValueError(f"Unknown filter type: {filter_type}.")
 
     return filtered
 
