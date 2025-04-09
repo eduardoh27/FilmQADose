@@ -1,0 +1,6 @@
+site_name: FilmQADose
+theme:
+  name: material
+nav:
+  - Inicio: index.md
+  - Guía: guia.md

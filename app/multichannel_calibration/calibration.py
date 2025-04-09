@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 from scipy.optimize import curve_fit
-from calibration.functions import get_fitting_function
-from calibration.dose import CalibrationDose
-from calibration.image_processing import read_image, filter_image
+from multichannel_calibration.functions import get_fitting_function
+from multichannel_calibration.dose import CalibrationDose
+from multichannel_calibration.image_processing import read_image, filter_image
 from sklearn.metrics import r2_score, root_mean_squared_error, mean_squared_error 
 import cv2
 
@@ -36,6 +36,7 @@ class FilmCalibration:
         #self.dose_to_netOD_by_channel = []
         self.dose_to_independent_by_channel = []  
         self.parameters = None
+        self.parameters_derivatives = None
         self.uncertainties = None  # Will store the uncertainties (standard deviations) of the parameters
         self.fitting_func_name = fitting_function_name
         # Retrieve the FittingFunction instance
@@ -145,6 +146,7 @@ class FilmCalibration:
 
         dose_to_independent_by_channel = []
         parameters = []
+        parameters_derivatives = []
         uncertainties = []
         for channel in range(0, 3):
             dose_to_independent = self.compute_channel_independent_values(channel)
@@ -165,10 +167,16 @@ class FilmCalibration:
             parameters.append(popt)
             # Calculate uncertainties as the square root of the diagonal of the covariance matrix.
             uncertainties.append(np.sqrt(np.diag(pcov)))
-
+            
+            # Derivative
+            # Fit the calibration function to the data:
+            popt_derivative, pcov_derivative = curve_fit(self.fitting_func_instance.derivative_func, independent_list, dose_list,
+                                p0=p0, maxfev=10000)
+            parameters_derivatives.append(popt_derivative)
 
         self.dose_to_independent_by_channel = dose_to_independent_by_channel
         self.parameters = parameters
+        self.parameters_derivatives = parameters_derivatives
         self.uncertainties = uncertainties
 
         return parameters
@@ -466,12 +474,15 @@ class FilmCalibration:
         # - Si es 'netOD': netOD = log10(PV_before / PV_after)
         # - Si es 'netT': netT = (PV_after - PV_before) / 2^(bits_per_channel)
         independent_variable = self.fitting_func_instance.independent_variable
+
         if independent_variable == "netOD":
-            # Evitar división por cero
-            film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)
+            film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)            # Evitar división por cero
             x_map = np.log10(PV_before / film_channel_safe)
+
         elif independent_variable == "netT":
-            x_map = (film_channel - PV_before) # / (2 ** self.bits_per_channel)
+            #print(f"PV_before: {PV_before}")
+            #print(f"film_channel: {film_channel}")
+            x_map = (film_channel - PV_before) 
         else:
             raise ValueError(f"Tipo de variable independiente no soportada: {independent_variable}")
 
@@ -486,6 +497,128 @@ class FilmCalibration:
         dose_map = np.nan_to_num(dose_map)
         
         return dose_map
+
+        
+    def compute_derivative_map(self, film_file: str, channel: int = 0):
+
+        # Cargar la imagen de la película
+        film_image = read_image(film_file)
+        
+        # Si la imagen tiene múltiples canales, seleccionar el canal indicado
+        if film_image.ndim == 3:
+            film_channel = film_image[:, :, channel]
+        else:
+            film_channel = film_image
+
+        # filter_image
+        if self.filter_type is not None:
+            film_channel = filter_image(film_channel, self.filter_type)
+
+        # Recuperar el valor global PV_before para el canal especificado (definido en la calibración, usualmente de dosis 0)
+        PV_before = self.pixel_values_before[channel]
+        if PV_before is None:
+            raise ValueError(f"El valor global PV_before para el canal {channel} no está definido. Asegúrese de calibrar incluyendo dosis 0.")
+
+        # Calcular la variable independiente para cada píxel, según la definición:
+        # - Si es 'netOD': netOD = log10(PV_before / PV_after)
+        # - Si es 'netT': netT = (PV_after - PV_before) / 2^(bits_per_channel)
+        independent_variable = self.fitting_func_instance.independent_variable
+
+        if independent_variable == "netOD":
+            film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)            # Evitar división por cero
+            x_map = np.log10(PV_before / film_channel_safe)
+
+        elif independent_variable == "netT":
+            #print(f"PV_before: {PV_before}")
+            #print(f"film_channel: {film_channel}")
+            x_map = (film_channel - PV_before) 
+        else:
+            raise ValueError(f"Tipo de variable independiente no soportada: {independent_variable}")
+
+        # Recuperar los parámetros calibrados para el canal seleccionado.
+        # Se asume que self.parameters es una lista con un conjunto de parámetros para cada canal.
+        popt = self.parameters_derivatives[channel]
+
+        # Aplicar la función de calibración con los parámetros optimizados para obtener el mapa de dosis.
+        derivative_map = self.fitting_func_instance.derivative_func(x_map, *popt)
+
+        # cambiar nan por 0
+        # TODO: VERIFICAR SI ES NECESARIO!!
+        #derivative_map = np.nan_to_num(derivative_map)
+        
+        return derivative_map
+
+
+    def compute_dose_map_multichannel(self, film_file: str) -> np.ndarray:
+
+        dose_maps = []
+        derivative_maps = []
+        for i in range(3):
+            dose_map = self.compute_dose_map(film_file, channel=i)
+            dose_maps.append(dose_map)
+            # hay dosis negativas? imprimri el conteo
+            negative_doses = np.sum(dose_map < 0)
+            if negative_doses > 0:
+                print(f"Hay {negative_doses} dosis negativas en el canal {i}.")
+            derivative_map = self.compute_derivative_map(film_file, channel=i)
+            derivative_maps.append(derivative_map)
+
+
+
+        # TODO: Encontrar la dosis promedio de los tres canales
+        # D_ave(i,j) = (1/3) * sum_{k=1}^{3} D_k(i,j)
+        #            = (1/3) * (D_R(i,j) + D_G(i,j) + D_B(i,j))
+        #Dave = ? 
+
+        # TODO: Encontrar la relative slope 
+        # RS(i,j) = (1/3) * ( (sum_{k=1}^{3} a_k(i,j))^2 ) / (sum_{k=1}^{3} a_k(i,j)^2)
+        # RS = ?
+
+        # TODO: encontrar D_k * a_k
+        # sum_{k=1}^{3} D_k(i,j) * a_k(i,j)
+        # Dk_ak
+
+        # TODO: encontrar a_k
+        # sum_{k=1}^{3} * a_k(i,j)
+        # Dk_ak
+
+        # Paso 1: Calcular la dosis promedio de los tres canales
+        # D_ave(i,j) = (1/3) * (D_R(i,j) + D_G(i,j) + D_B(i,j))
+        D_ave = (dose_maps[0] + dose_maps[1] + dose_maps[2]) / 3.0
+
+        # Paso 2: Calcular la "relative slope" (RS)
+        # RS(i,j) = (1/3) * ( (a_R + a_G + a_B)^2 ) / (a_R^2 + a_G^2 + a_B^2)
+        a_sum = derivative_maps[0] + derivative_maps[1] + derivative_maps[2]
+        a_sq_sum = derivative_maps[0]**2 + derivative_maps[1]**2 + derivative_maps[2]**2
+        RS = (1.0 / 3.0) * (a_sum ** 2) / a_sq_sum
+
+        # Paso 3: Calcular la suma de D_k * a_k para cada píxel
+        # Dk_ak(i,j) = D_R(i,j)*a_R(i,j) + D_G(i,j)*a_G(i,j) + D_B(i,j)*a_B(i,j)
+        Dk_ak = dose_maps[0] * derivative_maps[0] + dose_maps[1] * derivative_maps[1] + dose_maps[2] * derivative_maps[2]
+
+        # Paso 4: Calcular la suma de a_k para cada píxel (ya calculada en a_sum)
+        # a_sum(i,j) = a_R(i,j) + a_G(i,j) + a_B(i,j)
+        # (La variable 'a_sum' ya contiene este resultado)
+
+        # Finalmente, se puede obtener la dosis final combinada (multicanal)
+        # utilizando la corrección ponderada:
+        # D_multichannel(i,j) = D_ave(i,j) + RS(i,j) * ( (Dk_ak(i,j) / a_sum(i,j)) - D_ave(i,j) )
+        D_multichannel = D_ave + RS * ((Dk_ak / a_sum) - D_ave)
+        #D_multichannel = ( D_ave - ( RS * Dk_ak / a_sum) ) / ( 1 - RS )
+
+        # Cambiar valores negativos a 0
+        D_multichannel[D_multichannel < 0] = 0
+
+        # Cambiar valores NaN a 0
+        D_multichannel = np.nan_to_num(D_multichannel)
+
+        return D_multichannel
+
+        
+
+
+        
+
 
 
     def __repr__(self):

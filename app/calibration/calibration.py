@@ -11,11 +11,11 @@ import cv2
 
 class FilmCalibration:
 
-    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel =    8, 
-                calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
-                filter_type='median'):
+    def __init__(self, groundtruth_image: np.ndarray, bits_per_channel=8, 
+                 calibration_type: str = 'single-channel', fitting_function_name: str = 'polynomial',
+                 filter_type='median'):
         """
-        Initializes the film calibration process by defining the ground truth image
+        Initializes the film calibration process by setting the ground truth image 
         and the calibration type.
 
         Parameters
@@ -23,28 +23,36 @@ class FilmCalibration:
         groundtruth_image : np.ndarray
             The original ground truth image where the irradiated films are located.
             It must be a NumPy array with dimensions [height, width, channels].
+        bits_per_channel : int, optional
+            Number of bits per channel (default is 8).
         calibration_type : str, optional
             Calibration type ('single-channel' or 'multi-channel'). Default is 'single-channel'.
+        fitting_function_name : str, optional
+            Name of the fitting function to use. Default is 'polynomial'.
+        filter_type : str, optional
+            Type of filter to apply to images. Default is 'median'.
         """
+        # Store the ground truth image and basic calibration parameters
         self.groundtruth_image = groundtruth_image
         self.bits_per_channel = bits_per_channel
         self.calibration_type = calibration_type
         self.filter_type = filter_type
-        self.doses = {}           # Dictionary mapping dose value to a CalibrationDose object
-        # Global PV_before per channel, defined as the PV_after of dose 0 for each channel.
+        # Dictionary to store CalibrationDose instances mapped by dose value
+        self.doses = {}
+        # List to store the pre-irradiation pixel values for each channel
         self.pixel_values_before = [None, None, None]
-        #self.dose_to_netOD_by_channel = []
+        # List to store the mapping between dose and independent variable per channel
         self.dose_to_independent_by_channel = []  
         self.parameters = None
-        self.uncertainties = None  # Will store the uncertainties (standard deviations) of the parameters
+        self.uncertainties = None  # Will store the standard deviations of the fitting parameters
         self.fitting_func_name = fitting_function_name
-        # Retrieve the FittingFunction instance
+        # Retrieve the fitting function instance based on the provided function name
         self.fitting_func_instance = get_fitting_function(fitting_function_name)
 
     def add_roi(self, dose: float, x: int, y: int, size: int):
         """
-        Registers an ROI associated with a given dose. If the dose does not exist,
-        a new CalibrationDose instance is created.
+        Registers a region of interest (ROI) associated with a given dose. If the dose 
+        does not exist, a new CalibrationDose instance is created.
 
         Parameters
         ----------
@@ -57,8 +65,10 @@ class FilmCalibration:
         size : int
             Length of the square defining the ROI.
         """
+        # If the dose is not already registered, create a new CalibrationDose instance
         if dose not in self.doses:
             self.doses[dose] = CalibrationDose(dose, calibration=self)
+        # Add the ROI to the corresponding dose
         self.doses[dose].add_roi(x, y, size)
     
     def get_total_roi_count(self) -> int:
@@ -70,6 +80,7 @@ class FilmCalibration:
         int
             Total number of ROIs.
         """
+        # Sum the number of ROIs for each dose
         return sum(calib_dose.get_roi_count() for calib_dose in self.doses.values())
 
     def get_total_dose_count(self) -> int:
@@ -81,101 +92,126 @@ class FilmCalibration:
         int
             Total number of doses.
         """
+        # The count of doses is equal to the number of keys in the doses dictionary
         return len(self.doses)
 
     def get_rois_by_dose(self):
+        """
+        Prints out the ROIs for each registered dose.
+        """
+        # Iterate over each dose and its corresponding CalibrationDose object to print the ROIs
         for dose, calib_dose in self.doses.items():
-            print(f"Dosis: {calib_dose.value} Gy")
+            print(f"Dose: {calib_dose.value} Gy")
             print(f"ROIs: {calib_dose.rois} \n")
+            
             
     def compute_channel_independent_values(self, channel: int = 0) -> dict:
         """
-        Computes the independent variable (e.g., netOD or netT) for each dose using the global PV_before.
+        Computes the independent variable (e.g., netOD or netT) for each dose using 
+        the global pre-irradiation pixel value (PV_before).
+
+        Parameters
+        ----------
+        channel : int, optional
+            The channel index for which to compute the independent variable (default is 0).
+
+        Returns
+        -------
+        dict
+            A dictionary mapping dose values to the computed independent variable.
         """
+        # Ensure that dose 0 is defined to set the pre-irradiation pixel value (PV_before)
         if 0 not in self.doses:
             raise ValueError("Dose 0 must be defined in order to obtain pixel_values_before.")
         
-        # First, compute the average pixel value for all doses.
+        # Compute the average pixel value for all doses for the specified channel
         for dose, calib_dose in self.doses.items():
             calib_dose.compute_average_pv(channel)
 
-        # Set the global pixel value before exposure (using dose 0).
+        # Set the global PV_before using dose 0
         self.pixel_values_before[channel] = self.doses[0].pixel_values_after.get(channel, None)
         if self.pixel_values_before[channel] is None:
             raise ValueError(f"PV_before (from dose 0) for channel {channel} is not defined.")
         
         dose_to_value = {}
+        # Compute the independent variable (e.g., netOD or netT) for each dose
         for dose, calib_dose in self.doses.items():
             dose_to_value[dose] = calib_dose.compute_independent_value(self.pixel_values_before, channel)
 
+        # Return the mapping sorted by dose value
         return dict(sorted(dose_to_value.items()))
+
 
     def calibrate(self, calibration_type: str = 'single-channel'):
         """
         Calibrates the film based on the specified calibration type.
-        For now, only the single-channel calibration is implemented, which includes:
-        
+        Currently, only single-channel calibration is implemented, which includes:
+
           1. Computing channel averages.
-          2. Computing netOD for each dose.
+          2. Computing netOD (or another independent variable) for each dose.
           3. Fitting the calibration function using curve_fit.
-        
-        The fitting uses the netOD values as independent variables and the dose values as the dependent ones.
-        
+
+        The fitting uses the independent variable as the independent value and the dose as the dependent value.
+
         Parameters
         ----------
         calibration_type : str, optional
             Calibration type ('single-channel' or 'multi-channel'). Default is 'single-channel'.
-        
+
         Returns
         -------
-        tuple
-            The optimal parameters (a_opt, b_opt, n_opt) obtained from curve_fit.
-        
+        list
+            A list of optimal parameters for each channel obtained from curve_fit.
+
         Raises
         ------
         ValueError
-            If pixel_values_before is not defined.
+            If the pre-irradiation pixel value (PV_before) is not defined.
         """
+        # Only single-channel calibration is currently implemented
         if calibration_type != 'single-channel':
             raise NotImplementedError("Only single-channel calibration is implemented.")
         
-        # Ensure pixel_values_before is defined using the dose with value 0.
+        # Ensure that dose 0 exists for setting PV_before
         if 0 not in self.doses:
             raise ValueError("Dose 0 must be defined to set pixel_values_before.")
 
         dose_to_independent_by_channel = []
         parameters = []
         uncertainties = []
+        
+        # Iterate over the three channels of the image
         for channel in range(0, 3):
+            # Calculate the independent variable mapping for the given channel
             dose_to_independent = self.compute_channel_independent_values(channel)
             dose_to_independent_by_channel.append(dose_to_independent)
 
-            # Prepare lists for curve fitting.
-            # The keys of netODs are the dose values.
+            # Prepare lists for curve fitting: dose values and corresponding independent variable values
             dose_list = np.array(list(dose_to_independent.keys()))
             independent_list = np.array(list(dose_to_independent.values()))
         
-            # Determine initial parameter guess based on the number of parameters.
+            # Get initial parameter guess for the fitting function based on expected number of parameters
             num_params = len(self.fitting_func_instance.param_names)
             p0 = self.fitting_func_instance.initial_param_guess
 
-            # Fit the calibration function to the data:
+            # Perform the curve fitting using the fitting function and the data
             popt, pcov = curve_fit(self.fitting_func_instance.func, independent_list, dose_list,
-                                p0=p0, maxfev=10000)
+                                   p0=p0, maxfev=10000)
             parameters.append(popt)
-            # Calculate uncertainties as the square root of the diagonal of the covariance matrix.
+            # Calculate uncertainties as the square root of the diagonal elements of the covariance matrix
             uncertainties.append(np.sqrt(np.diag(pcov)))
 
-
+        # Store the computed mappings, parameters, and uncertainties for later use
         self.dose_to_independent_by_channel = dose_to_independent_by_channel
         self.parameters = parameters
         self.uncertainties = uncertainties
 
         return parameters
-
+    
     def get_metric(self, metric_name: str, channel: int = None):
         """
-        Computes the specified metric for the calibration curve(s) and returns a tuple containing the metric value and its formatted name.
+        Computes a specified metric for the calibration curve(s) and returns a tuple 
+        containing the metric value and its formatted name.
 
         Parameters
         ----------
@@ -186,32 +222,37 @@ class FilmCalibration:
             - 'mse' for the mean square error,
             - 'chi2', 'chi-squared', or 'chi^2' for the chi-squared value.
         channel : int, optional
-            The channel index for which to compute the metric. If None, returns a dictionary mapping channel indices to (value, formatted name) tuples.
+            The channel index for which to compute the metric. If None, returns a
+            dictionary mapping each channel index to a (value, formatted name) tuple.
 
         Returns
         -------
         tuple or dict
-            A tuple (metric_value, formatted_metric_name) if channel is specified,
+            A tuple (metric_value, formatted_metric_name) if a channel is specified,
             otherwise a dictionary mapping channel indices to such tuples.
         """
+        # Ensure that calibration has been performed and the necessary parameters exist
         if self.parameters is None or not self.dose_to_independent_by_channel:
             raise ValueError("Calibration parameters have not been computed. Please run calibrate() first.")
 
         def compute_for_channel(ch):
+            # Get dose values and the corresponding independent variable values for the channel
             dose_to_x = self.dose_to_independent_by_channel[ch]
             dose_list = np.array(list(dose_to_x.keys()))
             x_list = np.array(list(dose_to_x.values()))
             popt = self.parameters[ch]
+            # Compute the predicted dose using the fitting function with the optimized parameters
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
             
             metric = metric_name.lower()
+            # Calculate the requested metric
             if metric in ['r2', 'r^2']:
                 value = r2_score(dose_list, dose_predicted)
                 formatted = "R²"
-            elif metric in ['RMSE', 'rmse']:
+            elif metric in ['rmse', 'RMSE']:
                 value = root_mean_squared_error(dose_list, dose_predicted)
                 formatted = "RMSE"
-            elif metric in ['MSE', 'mse']:
+            elif metric in ['mse', 'MSE']:
                 value = mean_squared_error(dose_list, dose_predicted)
                 formatted = "MSE"
             elif metric in ['chi2', 'chi-squared', 'chi squared', 'chi^2']:
@@ -222,22 +263,30 @@ class FilmCalibration:
             return value, formatted
 
         if channel is not None:
+            # Return the metric for the specified channel
             return compute_for_channel(channel)
         else:
+            # Otherwise, compute the metric for each channel and return in a dictionary
             metrics = {}
             for ch in range(len(self.parameters)):
                 metrics[ch] = compute_for_channel(ch)
             return metrics
-
+        
     def graph_calibration_curve(self, metric_name='r2'):
         """
         Graphs the calibration curves for each channel.
-        The x-axis corresponds to the independent variable (e.g., netOD, netT) and
-        the y-axis corresponds to the dose.
+        The x-axis represents the independent variable (e.g., netOD or netT) and
+        the y-axis represents the dose.
+        
+        Parameters
+        ----------
+        metric_name : str, optional
+            The metric to display on the curve legend (default is 'r2').
         """
         colors = ['r', 'g', 'b']
         plt.figure(figsize=(8, 6))
 
+        # Iterate over each channel to plot experimental data points and the fitted curve
         for i, dose_to_x in enumerate(self.dose_to_independent_by_channel):
 
             dose_list = np.array(list(dose_to_x.keys()))
@@ -246,29 +295,31 @@ class FilmCalibration:
             popt = self.parameters[i]
             uncert = self.uncertainties[i]
 
-            # add small value for curve to get near the last point (needed in some cases)
+            # Define a smooth range for the independent variable for curve plotting
             x_fit = np.linspace(min(x_list), max(x_list) + 0.012, 300)
             dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
+            # Predict the dose values at the measured independent variable values
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
 
-            # Compute metrics using the new get_metric method.
+            # Compute the specified metric for the current channel
             metric_value, metric_text = self.get_metric(metric_name, channel=i)
 
-            # Generate label text with parameter values and uncertainties.
+            # Create a label displaying optimized parameters with their uncertainties and the metric
             label_text = "\n".join(
                 f"{name}={p:.3f}±{u:.3f}" 
                 for name, p, u in zip(self.fitting_func_instance.param_names, popt, uncert)
             )
             label_text += f"\n{metric_text}={metric_value:.3f}"
 
+            # Plot experimental data points and the fitted curve
             plt.scatter(x_list, dose_list, color=colors[i])
             plt.plot(x_fit, dose_fit, color=colors[i], linestyle='--', label=label_text)
 
         plt.title(f"Calibration Curves {self.fitting_func_instance.description}", fontsize=14)
         plt.ylabel("Dose (Gy)", fontsize=12)
         plt.xlabel(self.fitting_func_instance.independent_variable, fontsize=12)
-        # Position the legend outside the plot to the right
+        # Place the legend outside the plot area for clarity
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
         plt.show()
@@ -277,10 +328,15 @@ class FilmCalibration:
         """
         Graphs the response curves for each channel.
         The x-axis corresponds to the dose (Gy) and the y-axis corresponds to the film response 
-        (e.g., netOD, netT), which is the independent variable.
+        (e.g., netOD or netT), which is the independent variable.
         
-        For each channel, the method numerically inverts the calibration function f(x, *params) 
-        (which returns dose for a given response x) to obtain x for a range of dose values.
+        For each channel, this method numerically inverts the calibration function (which 
+        returns the dose for a given response) to obtain the independent variable for a range of doses.
+
+        Parameters
+        ----------
+        metric_name : str, optional
+            The metric to display on the curve legend (default is 'r2').
         """
         colors = ['r', 'g', 'b']
         plt.figure(figsize=(8, 6))
@@ -293,18 +349,19 @@ class FilmCalibration:
             popt = self.parameters[i]
             uncert = self.uncertainties[i]
 
-            # add small value for curve to get near the last point (needed in some cases)
+            # Define a smooth range for the independent variable inversion
             x_fit = np.linspace(min(x_list), max(x_list) + 0.015, 300)
             dose_fit = self.fitting_func_instance.func(x_fit, *popt)
             
+            # Predict the dose values at the measured independent variable values
             dose_predicted = self.fitting_func_instance.func(x_list, *popt)
 
-            # Compute metrics using the new get_metric method.
+            # Obtain the specified metric for the current channel to include in the legend
             metric_value, metric_text = self.get_metric(metric_name, channel=i)
 
-            # Generate label text with parameter values and uncertainties.
+            # Create a label displaying optimized parameters with uncertainties and the metric
             label_text = "\n".join(
-                f"{name}={p:.3f}±{u:.3f}" 
+                f"{name}={p:.3f}±{u:.3f}"
                 for name, p, u in zip(self.fitting_func_instance.param_names, popt, uncert)
             )
             label_text += f"\n{metric_text}={metric_value:.3f}"
@@ -315,7 +372,7 @@ class FilmCalibration:
         plt.title(f"Response Curves {self.fitting_func_instance.description}", fontsize=14)
         plt.xlabel("Dose (Gy)", fontsize=12)
         plt.ylabel(self.fitting_func_instance.independent_variable, fontsize=12)
-        # Position the legend outside the plot to the right
+        # Place the legend outside the plot area for clarity
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
         plt.show()
@@ -324,21 +381,24 @@ class FilmCalibration:
         """
         Exports the FilmCalibration instance to a JSON file.
         Only the following attributes are saved:
-        - groundtruth_image (converted to list)
-        - bits_per_channel
-        - calibration_type
-        - filter_type
-        - dose_to_independent_by_channel
-        - parameters (converted to lists)
-        - uncertainties (converted to lists)
-        - fitting_func_name
-        Doses, pixel_values_before, and fitting_func_instance are NOT saved.
-        
+            - groundtruth_image (converted to list)
+            - bits_per_channel
+            - calibration_type
+            - filter_type
+            - pixel_values_before
+            - dose_to_independent_by_channel
+            - parameters (converted to lists)
+            - uncertainties (converted to lists)
+            - fitting_func_name
+        Note: The doses, pre-irradiation pixel values (pixel_values_before), and the fitting function
+              instance are not saved.
+
         Parameters
         ----------
         filename : str
             The path to the JSON file where the instance will be saved.
         """
+        # Prepare a dictionary with the data to export, converting NumPy arrays to lists
         data = {
             "groundtruth_image": self.groundtruth_image.tolist(),
             "bits_per_channel": self.bits_per_channel,
@@ -350,6 +410,7 @@ class FilmCalibration:
             "uncertainties": [u.tolist() if isinstance(u, (np.ndarray, list)) else u for u in self.uncertainties] if self.uncertainties is not None else None,
             "fitting_func_name": self.fitting_func_name
         }
+        # Write the dictionary to the specified JSON file
         with open(filename, 'w') as f:
             json.dump(data, f)
 
@@ -358,31 +419,34 @@ class FilmCalibration:
         """
         Loads a FilmCalibration instance from a JSON file.
         The JSON must contain the keys:
-        - groundtruth_image
-        - bits_per_channel
-        - calibration_type
-        - filter_type
-        - dose_to_independent_by_channel
-        - parameters
-        - uncertainties
-        - fitting_func_name
-        Note: Doses, pixel_values_before, and fitting_func_instance are not stored;
-        fitting_func_instance is re-initialized using the fitting_func_name.
-        
+            - groundtruth_image
+            - bits_per_channel
+            - calibration_type
+            - filter_type
+            - dose_to_independent_by_channel
+            - parameters
+            - uncertainties
+            - fitting_func_name
+        Note: The doses, pre-irradiation pixel values (pixel_values_before), and the fitting function
+              instance are not stored; the fitting function instance is re-initialized using the fitting_func_name.
+
         Parameters
         ----------
         filename : str
             The path to the JSON file to load.
-        
+
         Returns
         -------
         FilmCalibration
             The reconstructed FilmCalibration instance.
         """
+        # Open and read the JSON file to load the data
         with open(filename, 'r') as f:
             data = json.load(f)
         
+        # Reconstruct the ground truth image from the stored list
         groundtruth_image = np.array(data["groundtruth_image"])
+        # Create an instance using the basic stored parameters
         instance = cls(
             groundtruth_image=groundtruth_image,
             bits_per_channel=data.get("bits_per_channel"),
@@ -391,24 +455,25 @@ class FilmCalibration:
             filter_type=data.get("filter_type")
         )
 
-        # Cargar pixel_values_before, convirtiendo cada valor a np.float64 si no es None.
+        # Load the global pre-irradiation pixel values, converting each to np.float64 if necessary
         instance.pixel_values_before = [
             None if x is None else np.float64(x) for x in data.get("pixel_values_before", [None, None, None])
         ]
         
-
-        # Convertir cada diccionario de dose_to_independent_by_channel:
+        # Reconstruct the mapping of dose to independent variable for each channel
         dose_to_independent_by_channel = data.get("dose_to_independent_by_channel", [])
         instance.dose_to_independent_by_channel = [
             {float(k): np.float64(v) for k, v in d.items()} for d in dose_to_independent_by_channel
         ]
 
+        # Reconstruct the fitting parameters if available
         parameters = data.get("parameters")
         if parameters is not None:
             instance.parameters = [np.array(p) for p in parameters]
         else:
             instance.parameters = None
 
+        # Reconstruct the uncertainties if available
         uncertainties = data.get("uncertainties")
         if uncertainties is not None:
             instance.uncertainties = [np.array(u) for u in uncertainties]
@@ -416,79 +481,76 @@ class FilmCalibration:
             instance.uncertainties = None
         
         return instance
-
-    def compute_dose_map(self, film_file: str, channel: int = 0, new_size = 512) -> np.ndarray:
+    
+    def compute_dose_map(self, film_file: str, channel: int = 0, new_size=512) -> np.ndarray:
         """
-        Carga una película irradiada desde un archivo .tif y calcula el mapa de dosis usando
-        el modelo calibrado y el método de un solo canal.
+        Loads an irradiated film from a .tif file and computes the dose map using the calibrated model
+        and the single-channel method.
 
         Parameters
         ----------
         film_file : str
-            Ruta al archivo .tif que contiene la película irradiada.
+            Path to the .tif file that contains the irradiated film.
         channel : int, optional
-            Canal de la imagen que se utilizará para calcular el mapa de dosis (por defecto 0).
+            The channel of the image to be used for calculating the dose map (default is 0).
+        new_size : int, optional
+            A new size for resizing the image (not used in the current implementation).
 
         Returns
         -------
         np.ndarray
-            Un arreglo 2D que representa el mapa de dosis calculado para la película.
+            A 2D array representing the calculated dose map for the film.
 
         Raises
         ------
         ValueError
-            Si el valor global PV_before para el canal indicado no está definido o si la 
-            variable independiente utilizada no es compatible.
+            If the global pre-irradiation pixel value (PV_before) for the specified channel is not defined
+            or if the independent variable used is not supported.
         """
-        # Cargar la imagen de la película
+        # Load the film image from the file
         film_image = read_image(film_file)
 
-        # resize image using scikit
-        #film_image = cv2.resize(film_image, (new_size , new_size ), interpolation = cv2.INTER_NEAREST)
+        # Optionally resize the image using OpenCV (commented out to preserve original logic)
+        # film_image = cv2.resize(film_image, (new_size, new_size), interpolation=cv2.INTER_NEAREST)
 
-        
-        # Si la imagen tiene múltiples canales, seleccionar el canal indicado
+        # If the image has multiple channels, extract the specified channel; otherwise use the image itself
         if film_image.ndim == 3:
             film_channel = film_image[:, :, channel]
         else:
             film_channel = film_image
 
-        # filter_image
+        # Apply the specified filter to reduce noise if a filter type is provided
         if self.filter_type is not None:
             film_channel = filter_image(film_channel, self.filter_type)
 
-        # Recuperar el valor global PV_before para el canal especificado (definido en la calibración, usualmente de dosis 0)
+        # Retrieve the global pre-irradiation pixel value for the specified channel (set during calibration)
         PV_before = self.pixel_values_before[channel]
         if PV_before is None:
-            raise ValueError(f"El valor global PV_before para el canal {channel} no está definido. Asegúrese de calibrar incluyendo dosis 0.")
+            raise ValueError(f"The global PV_before for channel {channel} is not defined. Please ensure dose 0 is calibrated.")
 
-        # Calcular la variable independiente para cada píxel, según la definición:
-        # - Si es 'netOD': netOD = log10(PV_before / PV_after)
-        # - Si es 'netT': netT = (PV_after - PV_before) / 2^(bits_per_channel)
+        # Calculate the independent variable (netOD or netT) for each pixel
         independent_variable = self.fitting_func_instance.independent_variable
         if independent_variable == "netOD":
-            # Evitar división por cero
+            # Replace zeros to avoid division by zero
             film_channel_safe = np.where(film_channel == 0, 1e-6, film_channel)
             x_map = np.log10(PV_before / film_channel_safe)
         elif independent_variable == "netT":
-            x_map = (film_channel - PV_before) # / (2 ** self.bits_per_channel)
+            x_map = (film_channel - PV_before)
         else:
-            raise ValueError(f"Tipo de variable independiente no soportada: {independent_variable}")
+            raise ValueError(f"Unsupported independent variable type: {independent_variable}")
 
-        # Recuperar los parámetros calibrados para el canal seleccionado.
-        # Se asume que self.parameters es una lista con un conjunto de parámetros para cada canal.
+        # Retrieve the calibrated parameters for the specified channel
         popt = self.parameters[channel]
 
-        # Aplicar la función de calibración con los parámetros optimizados para obtener el mapa de dosis.
+        # Apply the calibration function using the optimized parameters to obtain the dose map
         dose_map = self.fitting_func_instance.func(x_map, *popt)
 
-        # cambiar nan por 0
+        # Replace any NaN values with 0
         dose_map = np.nan_to_num(dose_map)
         
         return dose_map
 
-
-    def __repr__(self):
+def __repr__(self):
+        # Return a string representation of the object for easier debugging and printing
         return (f"FilmCalibration(NumDoses={self.get_total_dose_count()}, "
                 f"NumROIs={self.get_total_roi_count()}, Type={self.calibration_type})")
-

@@ -17,13 +17,14 @@ class FittingFunction:
             The name of the fitting function.
         func : callable
             The fitting function. The independent variable (x) should be its first argument.
+        initial_param_guess : list
+            A list of initial parameter guesses for the function.
         description : str
             A descriptive text (e.g., a LaTeX string) representing the fitting function.
         param_names : list
             A list of fitting parameter names (e.g., ["a", "b", "n"]).
         independent_variable : str
-            The independent variable of the function 
-            (e.g., "netOD", "netT").
+            The independent variable of the function (e.g., "netOD", "netT").
         """
         self.name = name
         self.func = func
@@ -40,14 +41,14 @@ class FittingFunction:
 def polynomial(x, a, b, n):
     """
     Polynomial fitting function.
-    
+
     Parameters
     ----------
     x : float or array-like
         The independent variable (e.g., netOD).
     a, b, n : float
         Fitting parameters.
-    
+
     Returns
     -------
     float or array-like
@@ -59,14 +60,14 @@ def polynomial(x, a, b, n):
 def rational(x, a, b):
     """
     Rational fitting function.
-    
+
     Parameters
     ----------
     x : float or array-like
         The independent variable (e.g., netOD).
     a, b : float
         Fitting parameters.
-    
+
     Returns
     -------
     float or array-like
@@ -75,14 +76,14 @@ def rational(x, a, b):
     return (a * x) / (1 - b * x)
 
 # Create FittingFunction instances for each fitting method.
-# You can define the supported x_types based on your application needs.
+# The supported independent variable types are defined based on application needs.
 polynomial_fitting = FittingFunction(
     name="polynomial",
     func=polynomial,
     initial_param_guess=[2.0, 2.0, 2.0],
     description=r"$D = a\,netOD + b\,netOD^n$",
     param_names=["a", "b", "n"],
-    independent_variable = "netOD"
+    independent_variable="netOD"
 )
 
 rational_fitting = FittingFunction(
@@ -91,10 +92,25 @@ rational_fitting = FittingFunction(
     initial_param_guess=[1.0, 1.0],
     description=r"$D = \frac{a\,netT}{1 - b\,netT}$",
     param_names=["a", "b"],
-    independent_variable= "netT"
+    independent_variable="netT"
 )
 
 def cuadratic(x, a, b, c):
+    """
+    Quadratic fitting function.
+
+    Parameters
+    ----------
+    x : float or array-like
+        The independent variable (e.g., netOD).
+    a, b, c : float
+        Fitting parameters.
+
+    Returns
+    -------
+    float or array-like
+        Calculated dose.
+    """
     return a * x**2 + b * x + c 
 
 cuadratic_fitting = FittingFunction(
@@ -103,9 +119,8 @@ cuadratic_fitting = FittingFunction(
     initial_param_guess=[1.0, 1.0, 1.0],
     description=r"$D = a\,netOD^2 + b\,netOD + c$",
     param_names=["a", "b", "c"],
-    independent_variable= "netOD"
+    independent_variable="netOD"
 )
-
 
 # Dictionary mapping function names to their corresponding FittingFunction instances.
 fitting_functions = {
@@ -117,12 +132,12 @@ fitting_functions = {
 def get_fitting_function(name: str) -> FittingFunction:
     """
     Retrieves the FittingFunction instance by name.
-    
+
     Parameters
     ----------
     name : str
         The name of the fitting function (e.g., "polynomial").
-    
+
     Returns
     -------
     FittingFunction
