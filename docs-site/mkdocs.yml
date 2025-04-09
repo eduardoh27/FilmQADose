@@ -40,4 +40,5 @@ plugins:
       default_handler: python
       handlers:
         python:
-          docstring_style: numpy
+          options:
+            docstring_style: numpy
