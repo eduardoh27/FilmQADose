@@ -2,5 +2,9 @@ site_name: FilmQADose
 theme:
   name: material
 nav:
-  - Inicio: index.md
-
+  - Home: index.md
+  - API: api.md
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
