@@ -3,4 +3,4 @@ theme:
   name: material
 nav:
   - Inicio: index.md
-  - Guía: guia.md
+
