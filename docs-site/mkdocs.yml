@@ -1,11 +1,11 @@
 site_name: FilmQADose
-site_description: Documentation for the FilmQADose project
-site_author: Eduardo Herrera
-language: en
+repo_url: https://github.com/eduardoh27/FilmQADose
+repo_name: GitHub
 
 theme:
   name: material
   logo: assets/logo.svg
+  favicon: assets/logo.svg
   features:
     - navigation.instant
     - navigation.sections
@@ -29,9 +29,6 @@ theme:
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
-
-repo_url: https://github.com/eduardoh27/FilmQADose
-repo_name: GitHub
 
 nav:
   - Home: index.md
