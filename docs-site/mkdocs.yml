@@ -15,18 +15,19 @@ theme:
     - content.action.edit
     - content.action.view
     - content.action.download
-  icon:
-    repo: fontawesome/brands/github
   palette:
     - scheme: default
-      primary: indigo
-      accent: indigo
-    - scheme: slate
       primary: indigo
       accent: indigo
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 
 repo_url: https://github.com/eduardoh27/FilmQADose
 repo_name: GitHub
@@ -34,7 +35,7 @@ repo_name: GitHub
 nav:
   - Home: index.md
   - API Reference: api.md
-  
+
 plugins:
   - search
   - mkdocstrings:
