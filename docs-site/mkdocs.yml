@@ -5,6 +5,7 @@ language: en
 
 theme:
   name: material
+  logo: assets/logo.svg
   features:
     - navigation.instant
     - navigation.sections
