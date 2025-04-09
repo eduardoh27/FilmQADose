@@ -9,5 +9,5 @@
 
 ## Dose Analysis
 
-::: app.calibration.dose_analysis.dose_profile
-::: app.calibration.dose_analysis.isodoses
+::: app.dose_analysis.dose_profile
+::: app.dose_analysis.isodoses
