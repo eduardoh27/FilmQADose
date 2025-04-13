@@ -1,6 +1,10 @@
+<!-- Scripts: Google JS API - jQuery -->
 <script src="http://www.google.com/jsapi" type="text/javascript"></script> 
-<script type="text/javascript">google.load("jquery", "1.3.2");</script>
+<script type="text/javascript">
+	google.load("jquery", "1.3.2");
+</script>
 
+<!-- CSS -->
 <style type="text/css">
 	body {
 		font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif; 
@@ -48,8 +52,7 @@
 		-webkit-border-radius: 10px ;
 	}
 	
-	a:link,a:visited
-	{
+	a:link,a:visited {
 		color: #1367a7;
 		text-decoration: none;
 	}
@@ -74,8 +77,8 @@
 		15px 15px 1px 1px rgba(0,0,0,0.35), /* The fourth layer shadow */
 		20px 20px 0 0px #fff, /* The fifth layer */
 		20px 20px 1px 1px rgba(0,0,0,0.35), /* The fifth layer shadow */
-		25px 25px 0 0px #fff, /* The fifth layer */
-		25px 25px 1px 1px rgba(0,0,0,0.35); /* The fifth layer shadow */
+		25px 25px 0 0px #fff, /* The quinta layer */
+		25px 25px 1px 1px rgba(0,0,0,0.35); /* The quinta layer shadow */
 		margin-left: 10px;
 		margin-right: 45px;
 	}
@@ -108,8 +111,7 @@
 		transform: translateY(-50%);
 	}
 	
-	hr
-	{
+	hr {
 		border: 0;
 		height: 1px;
 		background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
@@ -118,13 +120,13 @@
 
 <html>
 <head>
+	<!-- Metadata - Title -->
 	<title>This is my paper title</title>
 	<meta property="og:image" content="Path to my teaser.png"/> <!-- Facebook automatically scrapes this. Go to https://developers.facebook.com/tools/debug/ if you update and want to force Facebook to rescrape. -->
 	<meta property="og:title" content="Creative and Descriptive Paper Title." />
 	<meta property="og:description" content="Paper description." />
 
-	<!-- Get from Google Analytics -->
-	<!-- Global site tag (gtag.js) - Google Analytics -->
+	<!-- Google Analytics -->
 	<script async src=""></script> 
 	<script>
 		window.dataLayer = window.dataLayer || [];
@@ -137,38 +139,41 @@
 
 <body>
 	<br>
+	<!-- Creative and Descriptive Paper Title -->
 	<center>
-		<span style="font-size:36px">Creative and Descriptive Paper Title</span>
+		<span style="font-size:36px">FilmQADose: a free software alternative for radiochromic film dosimetry quality assurance</span>
+
 		<table align=center width=600px>
-			<table align=center width=600px>
+			<table align=center width=800px>
 				<tr>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">First Author</a></span>
+							<span style="font-size:24px"><a href="https://github.com/eduardoh27">Eduardo Herrera Alba</a></span>
 						</center>
 					</td>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">Second Author</a></span>
+							<span style="font-size:24px"><a href="https://es.wikipedia.org/wiki/Juliana_Sandoval_Navia">Juliana Sandoval Navia</a></span>
 						</center>
 					</td>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">Third Author</a></span>
+							<span style="font-size:24px"><a href="https://scholar.google.com/citations?user=_OczKMwAAAAJ&hl=en">Carlos Ávila Bernal</a></span>
 						</center>
 					</td>
 				</tr>
 			</table>
+
 			<table align=center width=250px>
 				<tr>
 					<td align=center width=120px>
 						<center>
-							<span style="font-size:24px"><a href=''>[Paper]</a></span>
+							<span style="font-size:24px"><a href="https://arxiv.org/pdf/">[Paper]</a></span>
 						</center>
 					</td>
 					<td align=center width=120px>
 						<center>
-							<span style="font-size:24px"><a href='https://github.com/richzhang/webpage-template'>[GitHub]</a></span><br>
+							<span style="font-size:24px"><a href="https://github.com/eduardoh27/FilmQADose/">[GitHub]</a></span><br>
 						</center>
 					</td>
 				</tr>
@@ -186,32 +191,38 @@
 				</td>
 			</tr>
 		</table>
-		<table align=center width=850px>
-			<tr>
-				<td>
-					This was a template originally made for <a href="http://richzhang.github.io/colorization/">Colorful Image Colorization</a>. The code can be found in this <a href="https://github.com/richzhang/webpage-template">repository</a>.
-				</td>
-			</tr>
-		</table>
 	</center>
 
 	<hr>
 
-	<table align=center width=850px>
+	<!-- Abstract -->
+	<table align=center width=1000px>
 		<center><h1>Abstract</h1></center>
 		<tr>
 			<td>
-				This is my abstract.
+				Radiochromic film dosimetry has been a valuable and important quality assurance (QA) tool for high resolution 2D
+				map dose verification in radiotherapy (RT) treatment plans, mainly due to its desirable properties as a dosimeter and
+				the relatively simple setup for irradiation and processing. However, the absence of open source software for film anal-
+				ysis limits its routine use, especially in countries where economic resources to acquire specialized software are tight.
+				Aiming to overcome this limitation, FilmQADose, an open source Python-based software for radiochromic film anal-
+				ysis was developed, allowing source modification to add new utilities. Main functionalities of FilmQADose include:
+				creation of various calibration functions, film digitization filtering and noise reduction, 2D dose map generation with
+				single and multichannel methods and plan-to-film comparison tools using DICOM RT files from the treatment planning
+				system (TPS), including Γ analysis and several visualization options. Software workflow was assesed on single field,
+				pyramidal and breast IMRT treatment plans. The first version of FilmQADose proved to be a useful, reliable and easy-
+				to-use software for radiochromic film analysis allowing accurate and reproducible RT plan verification, thus enhancing
+				accessibility and use of film-QA, especially in developing countries where it can be one of the best alternatives to make
+				radiation treatments secure and effective.
 			</td>
 		</tr>
 	</table>
 	<br>
 
 	<hr>
-	<center><h1>Talk</h1></center>
+	<!-- Videos -->
+	<center><h1>Videos</h1></center>
 	<p align="center">
-		<iframe width="660" height="395" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen align="center"></iframe>
-	</p>
+		<iframe width="660" height="395" src="https://youtu.be/lpuuvVmNSAI" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen align="center"></iframe>	</p>
 
 	<table align=center width=800px>
 		<br>
@@ -224,6 +235,7 @@
 	</table>
 	<hr>
 
+	<!-- Code -->
 	<center><h1>Code</h1></center>
 
 	<table align=center width=420px>
@@ -234,6 +246,7 @@
 			</tr>
 		</center>
 	</table>
+
 	<table align=center width=400px>
 		<tr>
 			<td align=center width=400px>
@@ -243,6 +256,7 @@
 			</td>
 		</tr>
 	</table>
+
 	<table align=center width=850px>
 		<center>
 			<tr>
@@ -252,23 +266,25 @@
 			</tr>
 		</center>
 	</table>
+
 	<table align=center width=800px>
 		<br>
 		<tr><center>
-			<span style="font-size:28px">&nbsp;<a href='https://github.com/richzhang/webpage-template'>[GitHub]</a>
+			<span style="font-size:28px">&nbsp;<a href="https://github.com/eduardoh27/FilmQADose/">[GitHub]</a>
 			</center>
 		</span>
 	</table>
 	<br>
 	<hr>
+	<!-- Paper and Supplementary Material -->
 	<table align=center width=450px>
 		<center><h1>Paper and Supplementary Material</h1></center>
 		<tr>
 			<td><a href=""><img class="layered-paper-big" style="height:175px" src="./resources/paper.png"/></a></td>
-			<td><span style="font-size:14pt">F. Author, S. Author, T. Author.<br>
-				<b>Creative and Descriptive Paper Title.</b><br>
+			<td><span style="font-size:14pt">
+				<b>FilmQADose: a free software alternative for radiochromic film dosimetry quality assurance</b><br>
+				F. Author, S. Author, T. Author.<br>
 				In Conference, 20XX.<br>
-				(hosted on <a href="">ArXiv</a>)<br>
 				<!-- (<a href="./resources/camera-ready.pdf">camera ready</a>)<br> -->
 				<span style="font-size:4pt"><a href=""><br></a>
 				</span>
@@ -277,10 +293,17 @@
 	</table>
 	<br>
 
-	<table align=center width=600px>
+	<!-- Links -->
+	<table align=center width=350px> 
 		<tr>
 			<td><span style="font-size:14pt"><center>
+				<a href="https://arxiv.org/pdf/">[Paper]</a>
+			</center></td>
+			<td><span style="font-size:14pt"><center>
 				<a href="./resources/bibtex.txt">[Bibtex]</a>
+			</center></td>
+			<td><span style="font-size:14pt"><center>
+				<a href="https://github.com/eduardoh27/FilmQADose/">[Code]</a>
 			</center></td>
 		</tr>
 	</table>
@@ -288,12 +311,15 @@
 	<hr>
 	<br>
 
+	<!-- Acknowledgements -->
 	<table align=center width=900px>
 		<tr>
 			<td width=400px>
 				<left>
 					<center><h1>Acknowledgements</h1></center>
-					This template was originally made by <a href="http://web.mit.edu/phillipi/">Phillip Isola</a> and <a href="http://richzhang.github.io/">Richard Zhang</a> for a <a href="http://richzhang.github.io/colorization/">colorful</a> ECCV project; the code can be found <a href="https://github.com/richzhang/webpage-template">here</a>.
+					We would like to acknowledge the Centro de Control de Cáncer in Bogotá for providing resources for the development of this project.<br>
+					Some of the authors acknowledge financial support from the Physics Department and the Faculty of Science of Universidad de los Andes, Bogotá, CO [project number INV-2020-105-2072].<br>
+					Finally, thanks to <a href="http://web.mit.edu/phillipi/">Phillip Isola</a> and <a href="http://richzhang.github.io/">Richard Zhang</a> for the project page <a href="https://github.com/richzhang/webpage-template">template</a>.
 				</left>
 			</td>
 		</tr>
@@ -302,4 +328,3 @@
 <br>
 </body>
 </html>
-
