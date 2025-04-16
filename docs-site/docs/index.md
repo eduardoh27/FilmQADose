@@ -1,6 +1,8 @@
 # Welcome to FilmQADose Documentation
 
-![FilmQADose Logo](assets/logo.svg)
+<p align="left">
+  <img src="assets/logo.svg" alt="FilmQADose Logo" width="180" />
+</p>
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](#prerequisites)
