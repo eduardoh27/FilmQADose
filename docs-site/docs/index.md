@@ -1,7 +1,7 @@
 # Welcome to FilmQADose Documentation
 
 <p align="left">
-  <img src="assets/logo.svg" alt="FilmQADose Logo" width="180" />
+  <img src="assets/logo full white bg.svg" alt="FilmQADose Logo" width="400" />
 </p>
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
