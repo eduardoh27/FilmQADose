@@ -1,7 +1,7 @@
 # FilmQADose
 
 <p align="left">
-  <img src="docs-site/docs/assets/logo full white bg.svg" alt="FilmQADose Logo" width="650" />
+  <img src="docs-site/docs/assets/logo full white bg.svg" alt="FilmQADose Logo" style="width:100%;" />
 </p>
 
 
