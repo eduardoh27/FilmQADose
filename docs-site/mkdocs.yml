@@ -6,29 +6,31 @@ theme:
   name: material
   logo: assets/logo.svg
   favicon: assets/logo.svg
+
+  palette:
+    - scheme: default
+      primary: teal      # cambia indigo por teal para un tono más fresco
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: “Modo oscuro”
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: “Modo claro”
+
+  font:
+    text: Roboto         # fuente sans-serif moderna
+    code: Roboto Mono
+
   features:
     - navigation.instant
-    - navigation.sections
-    - navigation.top
-    - header.autohide
+    - header.autohide    # oculta la cabecera al hacer scroll
     - toc.integrate
     - content.code.copy
     - content.action.edit
-    - content.action.view
-    - content.action.download
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
 
 nav:
   - Home: index.md
