@@ -123,6 +123,7 @@ def plot_isodose_map(path, save_fig=False):
     if save_fig:
         fig.savefig(f"{output_name}_isodoses.png", dpi=300)
     plt.show()
+    #return fig
 
 # Uncomment the line below to test the function with an example file.
-# plot_isodose_map('mama_TPS.dcm', save_fig=False)
+plot_isodose_map('media/mama_TPS.dcm', save_fig=False)

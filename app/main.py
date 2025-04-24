@@ -1,10 +1,17 @@
 import sys
 import os
+import cv2
 import numpy as np
-import pydicom
-
+import pyqtgraph as pg
+from pathlib import Path
+from io import BytesIO
+from pyqtgraph import RectROI
+from pydicom import dcmread
+from pydicom.filereader import InvalidDicomError
+from PIL import Image
+from datetime import datetime
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QPixmap, QImage
+from PySide6.QtGui import QAction, QPixmap, QImage, QIcon, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -14,9 +21,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QFileDialog,
     QTabWidget,
-    QSizePolicy
+    QSizePolicy,
+    QMessageBox,
+    QDialog,
 )
-
+from widgets.isodoses import IsodoseWidget   
+from widgets.dose_profile import DoseProfilesWidget
+from widgets.gamma import GammaWidget, GammaDialog
+from widgets.template_matching import TemplateDialog
+from widgets.new_calibration import CalibrationDialog, CalibrationWidget  
+from calibration.image_processing import template_matching
 
 class ScaledLabel(QLabel):
     """
@@ -67,6 +81,12 @@ class FilmQADoseMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FilmQADose")
+        icon_path = os.path.join(os.path.dirname(__file__), "media", "logo square.svg")
+        self.setWindowIcon(QIcon(icon_path))
+
+        self.default_dir = os.path.join(os.path.dirname(__file__), "media")
+        self.output_folder = os.path.join(self.default_dir, "outputs")
+
 
         # --- Create Menu Bar ---
         menubar = self.menuBar()
@@ -79,8 +99,29 @@ class FilmQADoseMainWindow(QMainWindow):
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
 
-        # Calibration menu (placeholder)
+        # --- Calibration menu ---
         calibration_menu = menubar.addMenu("Calibration")
+        # TODO:
+        calibration_menu.addAction(QAction("New Calibration", self, triggered=self.new_calibration))
+        # TODO LATER: Load calibration
+
+
+        # --- Tools menu ---
+        tools_menu = menubar.addMenu("Tools")
+        tools_menu.addAction(QAction("Isodoses", self, triggered=self.open_isodoses))
+        tools_menu.addAction(QAction("Profiles", self, triggered=self.open_profiles))
+        tools_menu.addAction(QAction("Gamma", self, triggered=self.open_gamma))
+        tools_menu.addAction(QAction("Crop with TM", self, triggered=self.open_crop_with_tm))
+
+
+
+        # --- View menu ---
+        view_menu = menubar.addMenu("View")
+        fullscreen_action = QAction("Toggle Fullscreen", self)
+        fullscreen_action.setShortcut("F11")
+        fullscreen_action.triggered.connect(self.toggle_fullscreen)
+        view_menu.addAction(fullscreen_action)
+        self.addAction(fullscreen_action)  # Enables global shortcut even if menu not focused
 
         # --- Main Layout Setup ---
         central_widget = QWidget()
@@ -89,7 +130,7 @@ class FilmQADoseMainWindow(QMainWindow):
 
         # Left Panel
         self.left_panel = QVBoxLayout()
-        self.info_label = QLabel("Welcome to FilmQADose")
+        self.info_label = QLabel("") # Default text
         self.left_panel.addWidget(self.info_label)
 
         # Right Panel as a Tab Widget
@@ -101,7 +142,7 @@ class FilmQADoseMainWindow(QMainWindow):
         self.tab_widget.currentChanged.connect(self.update_left_panel)
 
         main_layout.addLayout(self.left_panel, 1)
-        main_layout.addWidget(self.tab_widget, 3)
+        main_layout.addWidget(self.tab_widget, 4)
 
         # Add default "Welcome" tab
         self.add_welcome_tab()
@@ -109,20 +150,197 @@ class FilmQADoseMainWindow(QMainWindow):
         # Set an initial window size
         self.resize(800, 600)
 
+    def open_crop_with_tm(self):
+        dialog = TemplateDialog(self)
+        if dialog.exec() == QDialog.Accepted and dialog.template_path and dialog.film_path:
+            tps_path = dialog.template_path
+            film_path = dialog.film_path
+
+            # Crear output path
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = os.path.join(self.output_folder, f"crop_tm_{timestamp}.tif")
+
+            self.add_tab_crop_with_tm(tps_path, film_path, output_path, timestamp)
+    
+    def add_tab_crop_with_tm(self, tps_path, film_path, output_path, timestamp):
+        """Create a default welcome tab showing the logo"""
+        tm_label = ScaledLabel()
+
+        template_matching(tps_path, film_path, output_path)
+
+        tm_pixmap = QPixmap(output_path)
+
+        if not tm_pixmap.isNull():
+            tm_label.setPixmap(tm_pixmap)
+        else:
+            tm_label.setText(f"{output} not found or could not be loaded.")
+
+        tm_label.metadata = {
+            "type": "crop_tm",
+            "file_path": output_path,
+            "tps": os.path.basename(tps_path),
+            "film": os.path.basename(film_path)
+        }
+
+        tab_name = f"Crop TM ({timestamp})"
+        self.tab_widget.addTab(tm_label, tab_name)
+        self.tab_widget.setCurrentWidget(tm_label)
+
+
     def add_welcome_tab(self):
-        """Create a default welcome tab showing Uniandes.png."""
+        """Create a default welcome tab showing the logo"""
         welcome_label = ScaledLabel()
 
-        image_path = os.path.join(os.path.dirname(__file__), 'media', "Uniandes.png")
-        print(image_path)
+        #image_path = os.path.join(os.path.dirname(__file__), 'media', "Uniandes.png")
+        logo_name = "logo full without bg.svg"
+        image_path = os.path.join(os.path.dirname(__file__), 'media', logo_name)
         welcome_pixmap = QPixmap(image_path)
 
         if not welcome_pixmap.isNull():
             welcome_label.setPixmap(welcome_pixmap)
-            print("Loaded Uniandes.png")
+            #print("Loaded logo")
         else:
-            print("Could not load Uniandes.png")
-            welcome_label.setText("Uniandes.png not found or could not be loaded.")
+            print("Could not load logo")
+            welcome_label.setText(f"{logo_name} not found or could not be loaded.")
+
+        # Store a basic metadata for the welcome tab
+        welcome_label.metadata = {
+            "type": "welcome"
+        }
+
+        self.tab_widget.addTab(welcome_label, "Welcome")
+
+    def open_gamma(self):
+        dialog = GammaDialog(self)
+        if dialog.exec() == QDialog.Accepted and dialog.ref_path and dialog.eval_path:
+            ref = dialog.ref_path
+            eval_ = dialog.eval_path
+            dd = dialog.spin_diff.value()
+            dta = dialog.spin_dta.value()
+            self.add_gamma_tab(ref, eval_, dd, dta)
+
+    def add_gamma_tab(self, ref_path, eval_path, dose_diff, dta):
+        # Show waiting message in the tab
+        placeholder = QWidget()
+        box = QVBoxLayout(placeholder)
+        wait_lbl = QLabel("Calculating gamma analysis, please wait...")
+        wait_lbl.setAlignment(Qt.AlignCenter)
+        box.addWidget(wait_lbl)
+        tab_label = f"Gamma: {os.path.basename(ref_path)} vs {os.path.basename(eval_path)}"
+        index = self.tab_widget.addTab(placeholder, tab_label)
+        self.tab_widget.setCurrentIndex(index)
+
+        # Ejecutar cálculo tras breve retardo para renderizar mensaje
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self.replace_gamma_tab(
+            index, ref_path, eval_path, dose_diff, dta
+        ))
+
+    def replace_gamma_tab(self, index, ref_path, eval_path, dose_diff, dta):
+        # Crear y mostrar el widget definitivo
+        gamma_widget = GammaWidget(ref_path, eval_path, dose_diff, dta)
+        gamma_widget.setFocusPolicy(Qt.ClickFocus)
+        gamma_widget.setFocus()
+
+        tab_label = f"Gamma: {os.path.basename(ref_path)} vs {os.path.basename(eval_path)}"
+        # Reemplazar la pestaña de espera
+        self.tab_widget.removeTab(index)
+        self.tab_widget.insertTab(index, gamma_widget, tab_label)
+        self.tab_widget.setCurrentIndex(index)
+
+
+    def open_isodoses(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Select Dose Map",
+            self.default_dir, 
+            filter="Dose Maps (*.dcm *.npy)"
+        )
+        if path:
+            self.add_isodose_tab(path)
+
+    def add_isodose_tab(self, path):
+        isodose_widget = IsodoseWidget(path)
+        # Para asegurarnos de que canvas reciba eventos:
+        isodose_widget.setFocusPolicy(Qt.ClickFocus)
+        isodose_widget.setFocus()
+
+        # Añadir metadata para que update_left_panel pueda mostrar algo
+        isodose_widget.metadata = {
+            "type": "isodose",
+            "file_path": path,
+            "filename": os.path.basename(path)
+        }
+
+        tab_name = f"Isodose: {os.path.basename(path)}"
+        self.tab_widget.addTab(isodose_widget, tab_name)
+        self.tab_widget.setCurrentWidget(isodose_widget)
+
+
+    def open_profiles(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Select Dose Map for Profiles",
+            self.default_dir, 
+            filter="Dose Maps (*.dcm *.npy)"
+        )
+        if path:
+            self.add_profiles_tab(path)
+
+    def add_profiles_tab(self, path):
+        # Instantiate the profiles widget
+        profiles_widget = DoseProfilesWidget(path)
+        profiles_widget.setFocusPolicy(Qt.ClickFocus)
+        profiles_widget.setFocus()
+
+        # Añadir metadata para que update_left_panel pueda mostrar algo
+        profiles_widget.metadata = {
+            "type": "profiles",
+            "file_path": path,
+            "filename": os.path.basename(path)
+        }
+
+        tab_name = f"Profiles: {os.path.basename(path)}"
+        self.tab_widget.addTab(profiles_widget, tab_name)
+        self.tab_widget.setCurrentWidget(profiles_widget)
+
+    def new_calibration(self):
+        dialog = CalibrationDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            tif_path = dialog.calibration_path
+            calib_type = dialog.calib_type
+            self.add_new_calibration_tab(tif_path, calib_type)
+
+    def add_new_calibration_tab(self, tif_path, calib_type):
+        """
+        Crea una nueva pestaña con el CalibrationWidget
+        para la única película .tif y el tipo de calibración.
+        """
+        calib_widget = CalibrationWidget(tif_path, calib_type)
+        calib_widget.metadata = {
+            "type": "calibration",
+            "file": os.path.basename(tif_path),
+            "calibration_type": calib_type
+        }
+        tab_name = f"Calibration ({calib_type})"
+        self.tab_widget.addTab(calib_widget, tab_name)
+        self.tab_widget.setCurrentWidget(calib_widget)
+
+    def add_welcome_tab(self):
+        """Create a default welcome tab showing the logo"""
+        welcome_label = ScaledLabel()
+
+        #image_path = os.path.join(os.path.dirname(__file__), 'media', "Uniandes.png")
+        logo_name = "logo full without bg.svg"
+        image_path = os.path.join(os.path.dirname(__file__), 'media', logo_name)
+        welcome_pixmap = QPixmap(image_path)
+
+        if not welcome_pixmap.isNull():
+            welcome_label.setPixmap(welcome_pixmap)
+            #print("Loaded logo")
+        else:
+            print("Could not load logo")
+            welcome_label.setText(f"{logo_name} not found or could not be loaded.")
 
         # Store a basic metadata for the welcome tab
         welcome_label.metadata = {
@@ -133,7 +351,7 @@ class FilmQADoseMainWindow(QMainWindow):
 
     def open_file(self):
         """Prompt for a file and display it in a new tab."""
-        file_dialog = QFileDialog(self, "Open File")
+        file_dialog = QFileDialog(self, "Open File", self.default_dir)
         file_dialog.setNameFilter(
             "Images (*.png *.jpg *.jpeg *.tiff *.tif);;DICOM Files (*.dcm);;All Files (*)"
         )
@@ -194,9 +412,8 @@ class FilmQADoseMainWindow(QMainWindow):
         Use pydicom to read DICOM pixel data and convert to a QPixmap.
         Returns: (QPixmap, dict_of_dicom_fields)
         """
-        from pydicom.filereader import InvalidDicomError
         try:
-            ds = pydicom.dcmread(file_path)
+            ds = dcmread(file_path)
         except (InvalidDicomError, FileNotFoundError) as e:
             print(f"Error reading DICOM: {e}")
             return QPixmap(), {}
@@ -292,7 +509,7 @@ class FilmQADoseMainWindow(QMainWindow):
         tab_type = md.get("type", "unknown")
 
         if tab_type == "welcome":
-            self.info_label.setText("Welcome to FilmQADose")
+            self.info_label.setText("Welcome to FilmQADose!")
         elif tab_type == "image":
             file_path = md.get("file_path", "N/A")
             dims = md.get("dimensions", "N/A")
@@ -327,6 +544,67 @@ class FilmQADoseMainWindow(QMainWindow):
                 f"<b>Isocenter Position:</b> {md.get('IsocenterPosition','N/A')}"
             )
             self.info_label.setText(text)
+        
+        elif tab_type == "isodose":
+            file_path = md.get("file_path", "N/A")
+            text = (
+                f"<b>Isodose Map:</b> {os.path.basename(file_path)}<br>"
+                f"<b>Type:</b> {os.path.splitext(file_path)[1][1:].upper()} file"
+            )
+            self.info_label.setText(text)
+
+        elif tab_type == "profiles":
+            file_path = md.get("file_path", "N/A")
+            text = (
+                f"<b>Dose Map:</b> {os.path.basename(file_path)}<br>"
+                f"<b>Type:</b> {os.path.splitext(file_path)[1][1:].upper()} file"
+            )
+            self.info_label.setText(text)
+
+        elif tab_type == "gamma":
+            ref = os.path.basename(md.get("reference", "N/A"))
+            eval_ = os.path.basename(md.get("evaluation", "N/A"))
+            dd = md.get("dose_diff", "N/A")
+            dta = md.get("dta", "N/A")
+            pr = md.get("pass_rate", "N/A")
+
+            text = (
+                f"<b>Reference:</b> {ref}<br>"
+                f"<b>Evaluation:</b> {eval_}<br>"
+                f"<b>Dose Difference:</b> {dd:.1f}%<br>"
+                f"<b>DTA:</b> {dta:.1f} mm<br>"
+                f"<b>Pass rate:</b> {pr:.3f}%"
+            )
+            self.info_label.setText(text)
+
+        elif tab_type == "crop_tm":
+            full_path = md.get('file_path', 'N/A')
+            p = Path(full_path)
+            # Obtener los últimos 3 elementos de la ruta
+            last_parts = Path(*p.parts[-3:])
+            text = (
+                f"<b>Crop with Template Matching</b><br>"
+                f"<b>TPS:</b> {md.get('tps', 'N/A')}<br>"
+                f"<b>Film:</b> {md.get('film', 'N/A')}<br>"
+                f"<b>Saved to:</b><br>{last_parts.as_posix()}"
+            )
+            self.info_label.setText(text)
+
+        elif tab_type == "calibration":
+            # Nombre de la película usada
+            film = md.get("file", "N/A")
+            calib_type = md.get("calibration_type", "N/A")
+            text = (
+                f"<b>Calibration film:</b> {film}<br>"
+                    f"<b>Type:</b> {calib_type}"
+            )
+            # Si ya se ha guardado, mostrar también la ruta del JSON
+            if md.get("json_path"):
+                saved = os.path.basename(md["json_path"])
+                text += f"<br><b>Saved to:</b> {saved}"
+            self.info_label.setText(text)
+
+
         else:
             # Unknown or unhandled file
             file_path = md.get("file_path", "N/A")
@@ -336,11 +614,18 @@ class FilmQADoseMainWindow(QMainWindow):
         """Close the tab at the given index."""
         self.tab_widget.removeTab(index)
 
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode with F11."""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
 
 def main():
     app = QApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 12))
     window = FilmQADoseMainWindow()
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec())
 
 

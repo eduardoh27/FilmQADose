@@ -21,7 +21,7 @@ class CalibrationDose:
         # Dictionary to store the computed independent variable (e.g., netOD or netT) per channel.
         self.independent_values = {}  # {channel: computed independent variable}
 
-    def add_roi(self, x: int, y: int, size: int):
+    def add_roi(self, x: int, y: int, width: int, height: int):
         """
         Adds a square region of interest (ROI) associated with this dose.
 
@@ -34,7 +34,7 @@ class CalibrationDose:
         size : int
             The side length of the square ROI.
         """
-        self.rois.append((x, y, size))
+        self.rois.append((x, y, width, height))
 
     def compute_average_pv(self, channel: int = 0) -> float:
         """
@@ -52,9 +52,10 @@ class CalibrationDose:
             The computed average pixel value for the specified channel or None if no ROI exists.
         """
         roi_values = []
-        for (x, y, size) in self.rois:
+        for (x, y, w, h) in self.rois:
             # Extract the ROI from the ground truth image for the specified channel.
-            roi = self.calibration.groundtruth_image[y:y+size, x:x+size, channel]
+            # use width and height to extract the ROI
+            roi = self.calibration.groundtruth_image[y:y+h, x:x+w, channel]
             # Apply the median filter to the ROI to reduce noise.
             filtered_roi = filter_image(roi, filter_type=self.calibration.filter_type)
             # Compute the average pixel value of the filtered ROI.

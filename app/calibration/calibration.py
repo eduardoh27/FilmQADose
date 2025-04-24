@@ -32,6 +32,12 @@ class FilmCalibration:
         filter_type : str, optional
             Type of filter to apply to images. Default is 'median'.
         """
+        if not isinstance(groundtruth_image, np.ndarray):
+            if isinstance(groundtruth_image, str):
+                # If a string is provided, attempt to read the image from the file
+                groundtruth_image = read_image(groundtruth_image)
+            else:
+                raise ValueError("groundtruth_image must be a NumPy array.")
         # Store the ground truth image and basic calibration parameters
         self.groundtruth_image = groundtruth_image
         self.bits_per_channel = bits_per_channel
@@ -49,7 +55,7 @@ class FilmCalibration:
         # Retrieve the fitting function instance based on the provided function name
         self.fitting_func_instance = get_fitting_function(fitting_function_name)
 
-    def add_roi(self, dose: float, x: int, y: int, size: int):
+    def add_roi(self, dose: float, x: int, y: int, width: int, height: int):
         """
         Registers a region of interest (ROI) associated with a given dose. If the dose 
         does not exist, a new CalibrationDose instance is created.
@@ -69,7 +75,7 @@ class FilmCalibration:
         if dose not in self.doses:
             self.doses[dose] = CalibrationDose(dose, calibration=self)
         # Add the ROI to the corresponding dose
-        self.doses[dose].add_roi(x, y, size)
+        self.doses[dose].add_roi(x, y, width, height)
     
     def get_total_roi_count(self) -> int:
         """
@@ -322,7 +328,8 @@ class FilmCalibration:
         # Place the legend outside the plot area for clarity
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc='center left')
         plt.grid(True)
-        plt.show()
+        #plt.show()
+        return plt.gcf()  
 
     def graph_response_curve(self, metric_name='r2'):
         """

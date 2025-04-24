@@ -361,7 +361,7 @@ def get_real_dimensions(image_path):
         raise ValueError("Unsupported format. Use TIFF or DICOM.")
 
 
-def template_matching(TPS_map_path, film_tif_path, output_path):
+def template_matching(TPS_map_path, film_tif_path, output_path, verbose=False):
     """
     Performs template matching between a dose map (TPS map) from a DICOM file and an original film TIFF image.
     The function aligns the images using template matching, crops the matching region,
@@ -406,9 +406,10 @@ def template_matching(TPS_map_path, film_tif_path, output_path):
 
     # Obtain real dimensions in centimeters for both images
     widthA_cm, heightA_cm = get_real_dimensions(imageA_path)
-    print("Image A dimensions (cm):", widthA_cm, heightA_cm)
     widthB_cm, heightB_cm = get_real_dimensions(film_tif_full_path)
-    print("Image B dimensions (cm):", widthB_cm, heightB_cm)
+    if verbose:
+        print("Image A dimensions (cm):", widthA_cm, heightA_cm)
+        print("Image B dimensions (cm):", widthB_cm, heightB_cm)
 
     # Calculate the resolution (pixels per cm) for each image
     resolutionA_x = widthA / widthA_cm
@@ -416,15 +417,17 @@ def template_matching(TPS_map_path, film_tif_path, output_path):
     resolutionB_x = widthB / widthB_cm
     resolutionB_y = heightB / heightB_cm
 
-    print(f'Image A resolution: {resolutionA_x:.2f} px/cm x {resolutionA_y:.2f} px/cm')
-    print(f'Image B resolution: {resolutionB_x:.2f} px/cm x {resolutionB_y:.2f} px/cm')
+    if verbose:
+        print(f'Image A resolution: {resolutionA_x:.2f} px/cm x {resolutionA_y:.2f} px/cm')
+        print(f'Image B resolution: {resolutionB_x:.2f} px/cm x {resolutionB_y:.2f} px/cm')
 
     # If the resolutions differ, rescale Image A to match the physical scale of Image B
     if abs(resolutionA_x - resolutionB_x) > 1e-2 or abs(resolutionA_y - resolutionB_y) > 1e-2:
         new_widthA = int(widthA_cm * resolutionB_x)
         new_heightA = int(heightA_cm * resolutionB_y)
         imageA = cv2.resize(imageA, (new_widthA, new_heightA), interpolation=cv2.INTER_LINEAR)
-        print(f'Rescaled Image A to: {new_widthA}x{new_heightA} pixels')
+        if verbose:
+            print(f'Rescaled Image A to: {new_widthA}x{new_heightA} pixels')
 
     # Normalize both images to the range [0, 1]
     imageA = cv2.normalize(imageA, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
@@ -447,13 +450,14 @@ def template_matching(TPS_map_path, film_tif_path, output_path):
     axs[1].set_title("Transformed and Inverted Image B")
     axs[1].axis("off")
     fig.colorbar(im2, ax=axs[1])
-    plt.show()
+    #plt.show()
 
     # Apply template matching using the TM_CCOEFF_NORMED method
     result = cv2.matchTemplate(imageB_trans, imageA, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-    print(f'Maximum correlation value: {max_val:.3f}')
-    print(f'Top-left location in transformed image: {max_loc}')
+    if verbose:
+        print(f'Maximum correlation value: {max_val:.3f}')
+        print(f'Top-left location in transformed image: {max_loc}')
 
     # Get the template size (dimensions of Image A)
     template_height, template_width = imageA.shape
@@ -469,9 +473,10 @@ def template_matching(TPS_map_path, film_tif_path, output_path):
     orig_bottom = H - row_t
     orig_right = col_t + template_width
 
-    print('Coordinates in the original image for the crop:')
-    print(f'  Top-left: ({orig_left}, {orig_top})')
-    print(f'  Bottom-right: ({orig_right}, {orig_bottom})')
+    if verbose:
+        print('Coordinates in the original image for the crop:')
+        print(f'  Top-left: ({orig_left}, {orig_top})')
+        print(f'  Bottom-right: ({orig_right}, {orig_bottom})')
 
     # To visualize the bounding box on the original image:
     # Convert film_orig to 8-bit for display (preserving channels if present)
@@ -495,7 +500,7 @@ def template_matching(TPS_map_path, film_tif_path, output_path):
         plt.imshow(film_disp, cmap='gray')
     plt.title("Original Image with Bounding Box")
     plt.axis("off")
-    plt.show()
+    #plt.show()
 
     # Crop the identified region from the original image (without transformation)
     cropped = film_orig[orig_top:orig_bottom, orig_left:orig_right].copy()
