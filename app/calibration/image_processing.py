@@ -21,7 +21,7 @@ from PIL import Image
 from PIL.TiffTags import TAGS
 
 
-def tif_bits_per_channel(image_path):
+def tif_bits_per_channel(image_path: str) -> int:
     """
     Retrieves the number of bits per channel for a TIFF image.
 
